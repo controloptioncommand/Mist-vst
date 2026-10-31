@@ -1,0 +1,222 @@
+// Офлайн-тест: рендерит пресеты/алгоритмы в WAV, проверяет NaN, пики и скорость, снимает скриншот UI.
+#include <juce_audio_utils/juce_audio_utils.h>
+#include "PluginProcessor.h"
+#include "PluginEditor.h"
+#include "FactoryPresets.h"
+
+using namespace ferrite;
+
+static int failures = 0;
+#define CHECK(cond, msg) do { if (! (cond)) { ++failures; std::cout << "  FAIL: " << msg << "\n"; } } while (0)
+
+static void setParam (FerriteProcessor& p, const juce::String& id, float v)
+{
+    auto* pp = p.apvts.getParameter (id);
+    if (pp == nullptr) { std::cout << "  unknown param " << id << "\n"; ++failures; return; }
+    pp->setValueNotifyingHost (pp->convertTo0to1 (v));
+}
+
+struct Stats { float peak = 0; double rms = 0; bool finite = true; double realtimeFactor = 0; };
+
+static Stats render (FerriteProcessor& p, const std::vector<int>& notes, double holdSec, double tailSec,
+                     const juce::File& out, double sr = 48000.0, int block = 512)
+{
+    p.prepareToPlay (sr, block);
+    const int total = (int) ((holdSec + tailSec) * sr);
+    const int offAt = (int) (holdSec * sr);
+    juce::AudioBuffer<float> all (2, total);
+    juce::AudioBuffer<float> buf (2, block);
+    Stats st;
+    double sum = 0;
+
+    const auto t0 = juce::Time::getMillisecondCounterHiRes();
+    for (int pos = 0; pos < total; pos += block)
+    {
+        const int n = juce::jmin (block, total - pos);
+        buf.setSize (2, n, false, false, true);
+        juce::MidiBuffer midi;
+        if (pos == 0)
+            for (int nn : notes) midi.addEvent (juce::MidiMessage::noteOn (1, nn, (juce::uint8) 100), 0);
+        if (offAt >= pos && offAt < pos + n)
+            for (int nn : notes) midi.addEvent (juce::MidiMessage::noteOff (1, nn), offAt - pos);
+        p.processBlock (buf, midi);
+        for (int c = 0; c < 2; ++c) all.copyFrom (c, pos, buf, c, 0, n);
+    }
+    const auto ms = juce::Time::getMillisecondCounterHiRes() - t0;
+    st.realtimeFactor = (total / sr * 1000.0) / juce::jmax (0.001, ms);
+
+    for (int c = 0; c < 2; ++c)
+    {
+        const float* d = all.getReadPointer (c);
+        for (int i = 0; i < total; ++i)
+        {
+            if (! std::isfinite (d[i])) st.finite = false;
+            st.peak = juce::jmax (st.peak, std::abs (d[i]));
+            sum += (double) d[i] * d[i];
+        }
+    }
+    st.rms = std::sqrt (sum / (2.0 * total));
+
+    if (out != juce::File())
+    {
+        out.deleteFile();
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::OutputStream> os = std::make_unique<juce::FileOutputStream> (out);
+        if (auto w = wav.createWriterFor (os, juce::AudioFormatWriterOptions{}.withSampleRate (sr).withNumChannels (2).withBitsPerSample (24)))
+            w->writeFromAudioSampleBuffer (all, 0, total);
+    }
+    return st;
+}
+
+static void report (const juce::String& name, const Stats& s)
+{
+    std::cout << "  " << name.paddedRight (' ', 26) << " peak " << juce::String (s.peak, 3)
+              << "  rms " << juce::String (s.rms, 4) << "  x" << juce::String (s.realtimeFactor, 1) << " realtime"
+              << (s.finite ? "" : "  NaN!") << "\n";
+    CHECK (s.finite, name + " produced NaN/Inf");
+    CHECK (s.peak <= 1.0f, name + " peak above 0 dBFS");
+}
+
+static juce::File makeTestSample (const juce::File& dir)
+{
+    // 2 секунды: пила 220 Гц с вибрато, постепенно переходящая в шум
+    const double sr = 44100.0;
+    const int n = (int) (2.0 * sr);
+    juce::AudioBuffer<float> b (1, n);
+    juce::Random rng (42);
+    double ph = 0;
+    for (int i = 0; i < n; ++i)
+    {
+        const double t = i / sr;
+        ph += (220.0 * (1.0 + 0.003 * std::sin (t * 2 * juce::MathConstants<double>::pi * 5))) / sr;
+        ph -= std::floor (ph);
+        const float saw = (float) (2 * ph - 1);
+        const float mix = (float) juce::jlimit (0.0, 1.0, (t - 1.0) / 1.0);
+        b.setSample (0, i, 0.7f * ((1 - mix) * saw + mix * (rng.nextFloat() * 2 - 1)));
+    }
+    auto f = dir.getChildFile ("test_saw_220.wav");
+    f.deleteFile();
+    juce::WavAudioFormat wav;
+    std::unique_ptr<juce::OutputStream> os = std::make_unique<juce::FileOutputStream> (f);
+    if (auto w = wav.createWriterFor (os, juce::AudioFormatWriterOptions{}.withSampleRate (sr).withNumChannels (1).withBitsPerSample (16)))
+        w->writeFromAudioSampleBuffer (b, 0, n);
+    return f;
+}
+
+int main (int argc, char** argv)
+{
+    juce::ScopedJuceInitialiser_GUI gui;
+    const juce::File outDir = argc > 1 ? juce::File (juce::String (argv[1])) : juce::File::getCurrentWorkingDirectory().getChildFile ("render");
+    outDir.createDirectory();
+
+    auto proc = std::make_unique<FerriteProcessor>();
+    auto& p = *proc;
+
+    std::cout << "== Factory presets\n";
+    const auto& fp = getFactoryPresets();
+    p.presets.refresh();
+    for (int i = 0; i < (int) fp.size(); ++i)
+    {
+        p.presets.load (i);
+        auto st = render (p, { 48, 55, 60, 64 }, 3.0, 3.0, outDir.getChildFile ("preset_" + juce::String (i + 1) + "_" + fp[(size_t) i].name.replace (" ", "_") + ".wav"));
+        report (fp[(size_t) i].name, st);
+        CHECK (st.rms > 1e-4, fp[(size_t) i].name + " is silent");
+    }
+
+    std::cout << "== All 32 algorithms, worst case (8 voices x 8 unison, FM 400%, feedback 100%)\n";
+    double worstRt = 1e9;
+    for (int a = 0; a <= kNumAlgorithms; ++a)
+    {
+        p.presets.initPatch();
+        setParam (p, "algorithm", (float) a);
+        setParam (p, "fmAmount", 4.0f);
+        setParam (p, "uniVoices", 8);
+        for (int i = 0; i < kNumOps; ++i)
+        {
+            setParam (p, opId (i, "level"), 1.0f);
+            setParam (p, opId (i, "feedback"), 1.0f);
+            setParam (p, opId (i, "coarse"), (float) (i + 1));
+            setParam (p, opId (i, "out"), 1.0f);
+            for (int d = 0; d < kNumOps; ++d) if (d != i) setParam (p, matId (i, d), 1.0f);
+        }
+        auto st = render (p, { 36, 43, 48, 55, 60, 67, 72, 79 }, 1.0, 0.5, {});
+        worstRt = juce::jmin (worstRt, st.realtimeFactor);
+        if (! st.finite || st.peak > 1.0f) report ("algo " + juce::String (a), st);
+    }
+    std::cout << "  worst realtime factor: x" << juce::String (worstRt, 1) << "\n";
+
+    std::cout << "== Sample operator\n";
+    auto sampleFile = makeTestSample (outDir);
+    p.presets.initPatch();
+    p.loadSampleAsync (0, sampleFile);
+    for (int i = 0; i < 200 && p.getSample (0) == nullptr; ++i)
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (100);
+    auto asset = p.getSample (0);
+    CHECK (asset != nullptr, "sample did not load: " + p.getLastError());
+    if (asset)
+    {
+        std::cout << "  loaded '" << asset->name << "' len " << asset->length << " detected midi " << asset->detectedMidi
+                  << " frames " << asset->table.getNumFrames() << " flac " << (int) asset->encoded.getSize() << " bytes\n";
+        CHECK (std::abs (asset->detectedMidi - 57.0f) < 0.3f, "pitch detection: expected A3 (57)");
+        auto* root = p.apvts.getParameter (opId (0, "root"));
+        CHECK ((int) root->convertFrom0to1 (root->getValue()) == 57, "root not set from detection");
+
+        // wave-режим из семпла
+        setParam (p, opId (0, "scan"), 0.0f);
+        setParam (p, opId (1, "level"), 0.4f);
+        setParam (p, opId (1, "coarse"), 2);
+        report ("sample wavetable", render (p, { 57 }, 2.0, 1.0, outDir.getChildFile ("sample_wave.wav")));
+        // sample-режим с PM, петлёй и унисоном
+        setParam (p, opId (0, "mode"), (float) OpModeSample);
+        setParam (p, opId (0, "loopStart"), 0.2f);
+        setParam (p, opId (0, "loopEnd"), 0.6f);
+        setParam (p, "uniVoices", 4);
+        report ("sample playback PM", render (p, { 57, 64 }, 3.0, 1.0, outDir.getChildFile ("sample_play.wav")));
+        setParam (p, opId (0, "reverse"), 1.0f);
+        setParam (p, opId (0, "loopMode"), (float) LoopPingPong);
+        report ("sample reverse pingpong", render (p, { 50 }, 3.0, 1.0, outDir.getChildFile ("sample_pingpong.wav")));
+
+        // сохранение/восстановление состояния с семплом
+        juce::MemoryBlock state;
+        p.getStateInformation (state);
+        std::cout << "  state size " << (int) state.getSize() << " bytes\n";
+        auto p2 = std::make_unique<FerriteProcessor>();
+        p2->setStateInformation (state.getData(), (int) state.getSize());
+        auto a2 = p2->getSample (0);
+        CHECK (a2 != nullptr && a2->length == asset->length, "sample not restored from state");
+        auto* m2 = p2->apvts.getParameter (opId (0, "mode"));
+        CHECK ((int) m2->convertFrom0to1 (m2->getValue()) == OpModeSample, "params not restored");
+
+        // пресет-файл
+        CHECK (p.presets.save ("RenderTest Preset", "Tests"), "preset save failed");
+        p.presets.initPatch();
+        auto f = PresetManager::getPresetFolder().getChildFile ("Tests").getChildFile ("RenderTest Preset.ferrite");
+        CHECK (p.presets.loadFile (f), "preset load failed");
+        CHECK (p.getSample (0) != nullptr, "preset did not restore sample");
+        f.getParentDirectory().deleteRecursively();
+    }
+
+    // Скриншот интерфейса
+    if (juce::Desktop::getInstance().getDisplays().getPrimaryDisplay() != nullptr)
+    {
+        std::cout << "== Editor snapshot\n";
+        p.presets.load (2);
+        if (asset) p.loadSampleAsync (2, sampleFile);
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (500);
+        std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+        ed->setSize (FerriteEditor::kBaseW, FerriteEditor::kBaseH);
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (200);
+        auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+        auto pngFile = outDir.getChildFile ("ui.png");
+        pngFile.deleteFile();
+        juce::FileOutputStream fos (pngFile);
+        juce::PNGImageFormat().writeImageToStream (img, fos);
+        std::cout << "  wrote " << pngFile.getFullPathName() << "\n";
+        ed.reset();
+    }
+
+    proc.reset();
+    std::cout << (failures == 0 ? "ALL OK\n" : juce::String (failures) + " FAILURE(S)\n");
+    return failures == 0 ? 0 : 1;
+}
