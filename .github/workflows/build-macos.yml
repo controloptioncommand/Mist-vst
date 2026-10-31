@@ -57,6 +57,7 @@ jobs:
           cp -R build/Loom_artefacts/Release/VST3/Loom.vst3 dist/
           cp -R build/Loom_artefacts/Release/AU/Loom.component dist/
           cp scripts/install-mac.sh dist/
+          cp docs/Loom-Manual.pdf dist/
           cp "$RUNNER_TEMP/render"/*.wav dist/ 2>/dev/null || true
           cd dist && zip -qry ../Loom-macOS.zip .
 
