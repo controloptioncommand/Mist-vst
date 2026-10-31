@@ -1,203 +1,235 @@
 #include "OperatorPanel.h"
+#include "RoutingPanel.h"
 
-namespace ferrite
+namespace loom
 {
 static bool isAudioFile (const juce::String& path)
 {
     return juce::File (path).hasFileExtension ("wav;aif;aiff;flac;mp3;ogg;caf;m4a");
 }
 
+static float getParam (LoomProcessor& p, const juce::String& id)
+{
+    auto* pp = p.apvts.getParameter (id);
+    return pp != nullptr ? pp->convertFrom0to1 (pp->getValue()) : 0.0f;
+}
+
+juce::String operatorRole (LoomProcessor& p, int op)
+{
+    const auto r = Routing::read (p);
+    if (! r.on[op]) return "Off";
+    if (r.out[op] > 0.0f) return "Carrier";
+    for (int d = 0; d < kNumOps; ++d) if (r.mod[op][d] > 0.0f) return "Modulator";
+    return "Unused";
+}
+
+juce::String modeName (int mode)
+{
+    switch (mode)
+    {
+        case OpModeSample: return "Sample PM";
+        case OpModeGrain:  return "Grain";
+        default:           return "Scrub";
+    }
+}
+
+juce::String modeDescription (int mode)
+{
+    switch (mode)
+    {
+        case OpModeSample: return "Modulators bend this operator's read position in the sample, sample by sample.";
+        case OpModeGrain:  return "Overlapping grains from the sample at Position; modulators bend every grain's read head.";
+        default:           return "A wavetable sliced from the sample by its pitch period. Position scrubs through it.";
+    }
+}
+
 // ===========================================================================
-juce::RangedAudioParameter* WaveView::paramPtr (const char* name) const
+SampleSlot::SampleSlot (LoomProcessor& p, int o, std::function<void (int)> sel)
+    : proc (p), op (o), onSelect (std::move (sel))
 {
-    return proc.apvts.getParameter (opId (opIndex, name));
+    reverse.setClickingTogglesState (true);
+    reverseAttachment = std::make_unique<APVTS::ButtonAttachment> (proc.apvts, opId (op, "reverse"), reverse);
+    addAndMakeVisible (reverse);
 }
 
-float WaveView::param (const char* name) const
+float SampleSlot::param (const char* name) const { return getParam (proc, opId (op, name)); }
+
+void SampleSlot::refresh()
 {
-    auto* p = paramPtr (name);
-    return p != nullptr ? p->convertFrom0to1 (p->getValue()) : 0.0f;
+    const auto role = operatorRole (proc, op);
+    if (role != cachedRole) { cachedRole = role; }
+    repaint();
 }
 
-void WaveView::paint (juce::Graphics& g)
+void SampleSlot::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat();
-    g.setColour (Colours::bg);
-    g.fillRoundedRectangle (r, 4.0f);
-    const auto col = Colours::forOperator (opIndex);
-    auto asset = proc.getSample (opIndex);
-    const bool sampleMode = (int) param ("mode") == OpModeSample;
+    const auto col = Colours::forOperator (op);
+    const bool isOn = param ("on") > 0.5f;
 
-    if (asset != nullptr && sampleMode)
+    g.setColour (selected ? Colours::panel : Colours::panelHi);
+    g.fillRoundedRectangle (r.reduced (0.5f), 10.0f);
+    g.setColour (selected ? col.withAlpha (0.7f) : Colours::outline);
+    g.drawRoundedRectangle (r.reduced (0.5f), 10.0f, selected ? 1.5f : 1.0f);
+
+    auto asset = proc.getSample (op);
+    auto content = getLocalBounds().reduced (12, 8);
+
+    // заголовок: ● Op 1 · Carrier                 file.wav
+    auto top = content.removeFromTop (16);
+    powerArea = top.removeFromLeft (14);
+    g.setColour (isOn ? col : Colours::textDim.withAlpha (0.5f));
+    g.fillEllipse (powerArea.toFloat().withSizeKeepingCentre (8, 8));
+    g.setColour (isOn ? Colours::text : Colours::textDim);
+    g.setFont (LoomLookAndFeel::font (12.0f, true));
+    const juce::String title = "Op " + juce::String (op + 1) + midDot() + cachedRole;
+    g.drawText (title, top.removeFromLeft (130), juce::Justification::centredLeft);
+    g.setFont (LoomLookAndFeel::font (11.0f));
+    g.setColour (Colours::textDim);
+    const int mode = (int) param ("mode");
+    g.drawText (asset ? asset->name : juce::String ("no sample"), top, juce::Justification::centredRight, true);
+
+    // волна: вертикальные «штрихи», как в макете
+    content.removeFromTop (5);
+    auto bottom = content.removeFromBottom (18);
+    waveArea = content;
+    auto wa = waveArea.toFloat();
+    const float mid = wa.getCentreY(), hh = wa.getHeight() * 0.5f;
+    const auto waveCol = isOn ? col : Colours::textDim;
+    if (asset != nullptr && ! asset->overview.empty())
     {
         const int bins = (int) asset->overview.size() / 2;
-        const float mid = r.getCentreY(), hh = r.getHeight() * 0.45f;
-        g.setColour (col.withAlpha (0.8f));
-        for (int x = 0; x < (int) r.getWidth(); ++x)
+        const int bars = juce::jmax (8, (int) wa.getWidth() / 3);
+        const float st = param ("start");
+        for (int i = 0; i < bars; ++i)
         {
-            const int b = juce::jlimit (0, bins - 1, (int) ((float) x / r.getWidth() * (float) bins));
-            const float mn = asset->overview[(size_t) b * 2], mx = asset->overview[(size_t) b * 2 + 1];
-            g.drawVerticalLine ((int) r.getX() + x, mid - mx * hh, mid - mn * hh + 1.0f);
-        }
-
-        const float ls = param ("loopStart"), le = param ("loopEnd"), st = param ("start");
-        const int loopMode = (int) param ("loopMode");
-        if (loopMode != LoopOff)
-        {
-            g.setColour (Colours::accent2.withAlpha (0.12f));
-            g.fillRect (juce::Rectangle<float> (r.getX() + ls * r.getWidth(), r.getY(), (le - ls) * r.getWidth(), r.getHeight()));
-            g.setColour (Colours::accent2);
-            g.drawVerticalLine ((int) (r.getX() + ls * r.getWidth()), r.getY(), r.getBottom());
-            g.drawVerticalLine ((int) (r.getX() + le * r.getWidth()) - 1, r.getY(), r.getBottom());
-        }
-        g.setColour (Colours::text);
-        g.drawVerticalLine ((int) (r.getX() + st * r.getWidth()), r.getY(), r.getBottom());
-        if (! compact)
-        {
-            g.setFont (FerriteLookAndFeel::font (10.0f));
-            g.drawText ("S", juce::Rectangle<float> (r.getX() + st * r.getWidth() + 2, r.getY() + 2, 12, 12), juce::Justification::centredLeft);
+            const int b0 = i * bins / bars, b1 = juce::jmax (b0 + 1, (i + 1) * bins / bars);
+            float pk = 0;
+            for (int b = b0; b < b1; ++b)
+                pk = juce::jmax (pk, -asset->overview[(size_t) b * 2], asset->overview[(size_t) b * 2 + 1]);
+            const float x = wa.getX() + (float) i * wa.getWidth() / (float) bars;
+            const float h = juce::jmax (1.0f, pk * hh);
+            const bool before = (float) i / (float) bars < st;
+            g.setColour (waveCol.withAlpha (before ? 0.25f : 0.9f));
+            g.fillRoundedRectangle (x, mid - h, 1.6f, h * 2.0f, 0.8f);
         }
     }
     else
     {
-        // текущий кадр wavetable
-        const Wavetable& t = asset ? asset->table : Wavetable::getBasic();
-        const float scanV = param ("scan");
+        // нет семпла: пунктирная рамка-приглашение и встроенная волна
+        g.setColour (Colours::outline.darker (0.1f));
+        juce::Path border;
+        border.addRoundedRectangle (wa.reduced (0.5f), 6.0f);
+        juce::Path dashed;
+        const float dashes[] = { 4.0f, 3.0f };
+        juce::PathStrokeType (1.0f).createDashedStroke (dashed, border, dashes, 2);
+        g.fillPath (dashed);
+        const auto& t = Wavetable::getBasic();
         juce::Path p;
-        const int W = juce::jmax (2, (int) r.getWidth());
+        const int W = juce::jmax (2, (int) wa.getWidth() / 2);
         for (int x = 0; x < W; ++x)
         {
-            const float v = t.read ((double) x / (W - 1) * 0.999, scanV, 0);
-            const float y = r.getCentreY() - v * r.getHeight() * 0.42f;
-            if (x == 0) p.startNewSubPath (r.getX() + (float) x, y); else p.lineTo (r.getX() + (float) x, y);
+            const float v = t.read ((double) x / (W - 1) * 0.999, param ("scan"), 0);
+            const float px = wa.getX() + (float) x * wa.getWidth() / (float) (W - 1);
+            const float py = mid - v * hh * 0.6f;
+            if (x == 0) p.startNewSubPath (px, py); else p.lineTo (px, py);
         }
-        g.setColour (col.withAlpha (0.25f));
-        g.drawHorizontalLine ((int) r.getCentreY(), r.getX(), r.getRight());
-        g.setColour (col);
-        g.strokePath (p, juce::PathStrokeType (compact ? 1.2f : 1.8f));
-    }
-
-    if (! compact && asset == nullptr)
-    {
+        g.setColour (waveCol.withAlpha (0.35f));
+        g.strokePath (p, juce::PathStrokeType (1.2f));
         g.setColour (Colours::textDim);
-        g.setFont (FerriteLookAndFeel::font (11.0f));
-        g.drawText ("drop audio file here", r.reduced (6), juce::Justification::bottomRight);
+        g.setFont (LoomLookAndFeel::font (10.5f));
+        g.drawText (dragOver ? "Release to load" : "Drop a sample", wa, juce::Justification::centred);
     }
-}
 
-void WaveView::mouseDown (const juce::MouseEvent& e)
-{
-    dragging = nullptr;
-    if (compact || proc.getSample (opIndex) == nullptr || (int) param ("mode") != OpModeSample)
+    // низ: Start / Length
+    g.setColour (Colours::textDim);
+    g.setFont (LoomLookAndFeel::font (10.5f));
+    juce::String info;
+    if (asset)
     {
-        if (auto* parent = getParentComponent()) parent->mouseDown (e.getEventRelativeTo (parent));
-        return;
+        const double secs = (double) asset->length / asset->fileSampleRate;
+        info << "Start " << juce::String (param ("start") * secs, 2) << " s     Length " << juce::String (secs, 2) << " s";
     }
-    const float x = (float) e.x / (float) getWidth();
-    const char* names[] = { "start", "loopStart", "loopEnd" };
-    float best = 0.05f;
-    for (auto* n : names)
-    {
-        const float d = std::abs (param (n) - x);
-        if (d < best) { best = d; dragging = paramPtr (n); }
-    }
-    if (dragging) dragging->beginChangeGesture();
-}
+    else
+        info << modeName (mode) << midDot() << "built-in" << midDot() << "x" << juce::String (coarseToRatio ((int) param ("coarse")) * (1.0f + param ("fine")), 2);
+    g.drawText (info, bottom.withTrimmedRight (70), juce::Justification::centredLeft);
 
-void WaveView::mouseDrag (const juce::MouseEvent& e)
-{
-    if (dragging == nullptr) return;
-    const float x = juce::jlimit (0.0f, 1.0f, (float) e.x / (float) getWidth());
-    dragging->setValueNotifyingHost (dragging->convertTo0to1 (x));
-    repaint();
-}
-
-void WaveView::mouseUp (const juce::MouseEvent&)
-{
-    if (dragging) dragging->endChangeGesture();
-    dragging = nullptr;
-}
-
-// ===========================================================================
-OpCard::OpCard (FerriteProcessor& p, int o, std::function<void (int)> sel)
-    : proc (p), op (o), onSelect (std::move (sel)), level ("", Colours::forOperator (o)), wave (p)
-{
-    onButton.attach (proc.apvts, opId (op, "on"));
-    addAndMakeVisible (onButton);
-    level.attach (proc.apvts, opId (op, "level"));
-    level.slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-    addAndMakeVisible (level);
-
-    nameLabel.setText ("OP " + juce::String (op + 1), juce::dontSendNotification);
-    nameLabel.setFont (FerriteLookAndFeel::font (13.0f, true));
-    nameLabel.setColour (juce::Label::textColourId, Colours::forOperator (op));
-    nameLabel.setInterceptsMouseClicks (false, false);
-    addAndMakeVisible (nameLabel);
-
-    ratioLabel.setFont (FerriteLookAndFeel::font (11.0f));
-    ratioLabel.setColour (juce::Label::textColourId, Colours::textDim);
-    ratioLabel.setJustificationType (juce::Justification::centredRight);
-    ratioLabel.setInterceptsMouseClicks (false, false);
-    addAndMakeVisible (ratioLabel);
-
-    wave.setOperator (op);
-    wave.setCompact (true);
-    wave.setInterceptsMouseClicks (false, false);
-    addAndMakeVisible (wave);
-}
-
-void OpCard::refresh()
-{
-    auto get = [&] (const char* n) { auto* pp = proc.apvts.getParameter (opId (op, n)); return pp->convertFrom0to1 (pp->getValue()); };
-    juce::String txt;
-    if (get ("fixed") > 0.5f) txt = juce::String (get ("fixedHz"), 1) + " Hz";
-    else txt = "x" + juce::String (coarseToRatio ((int) get ("coarse")) * (1.0f + get ("fine")), 2);
-    if (auto a = proc.getSample (op)) txt = a->name.substring (0, 12) + "  " + txt;
-    ratioLabel.setText (txt, juce::dontSendNotification);
-    wave.repaint();
-}
-
-void OpCard::paint (juce::Graphics& g)
-{
-    auto r = getLocalBounds().toFloat().reduced (0.5f);
-    g.setColour (selected ? Colours::panelHi : Colours::panel);
-    g.fillRoundedRectangle (r, 6.0f);
-    g.setColour (selected ? Colours::forOperator (op) : Colours::outline);
-    g.drawRoundedRectangle (r, 6.0f, selected ? 1.5f : 1.0f);
-}
-
-void OpCard::paintOverChildren (juce::Graphics& g)
-{
     if (dragOver)
     {
-        g.setColour (Colours::forOperator (op).withAlpha (0.2f));
-        g.fillRoundedRectangle (getLocalBounds().toFloat(), 6.0f);
-        g.setColour (Colours::forOperator (op));
-        g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 6.0f, 2.0f);
+        g.setColour (col.withAlpha (0.10f));
+        g.fillRoundedRectangle (r, 10.0f);
+        g.setColour (col);
+        g.drawRoundedRectangle (r.reduced (1.0f), 10.0f, 2.0f);
     }
 }
 
-void OpCard::resized()
+void SampleSlot::resized()
 {
-    auto r = getLocalBounds().reduced (6);
-    auto top = r.removeFromTop (20);
-    onButton.setBounds (top.removeFromLeft (20));
-    nameLabel.setBounds (top.removeFromLeft (44));
-    ratioLabel.setBounds (top);
-    r.removeFromTop (4);
-    level.setBounds (r.removeFromRight (r.getHeight()).reduced (2));
-    r.removeFromRight (4);
-    wave.setBounds (r);
+    auto r = getLocalBounds().reduced (12, 8);
+    reverse.setBounds (r.removeFromBottom (18).removeFromRight (62));
 }
 
-void OpCard::mouseDown (const juce::MouseEvent&) { if (onSelect) onSelect (op); }
+void SampleSlot::mouseDown (const juce::MouseEvent& e)
+{
+    if (powerArea.expanded (4).contains (e.getPosition()))
+    {
+        if (auto* p = proc.apvts.getParameter (opId (op, "on")))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (p->getValue() > 0.5f ? 0.0f : 1.0f);
+            p->endChangeGesture();
+        }
+        return;
+    }
+    if (onSelect) onSelect (op);
 
-bool OpCard::isInterestedInFileDrag (const juce::StringArray& files)
+    if (e.mods.isPopupMenu())
+    {
+        juce::PopupMenu m;
+        m.addItem (1, "Load sample...");
+        m.addItem (2, "Clear sample", proc.getSample (op) != nullptr);
+        m.addSeparator();
+        for (int md : { OpModeSample, OpModeWave, OpModeGrain })
+            m.addItem (10 + md, modeName (md), true, (int) param ("mode") == md);
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this), [this] (int res)
+        {
+            if (res == 1) openFileChooser();
+            else if (res == 2) proc.clearSample (op);
+            else if (res >= 10)
+                if (auto* p = proc.apvts.getParameter (opId (op, "mode")))
+                {
+                    p->beginChangeGesture();
+                    p->setValueNotifyingHost (p->convertTo0to1 ((float) (res - 10)));
+                    p->endChangeGesture();
+                }
+        });
+    }
+}
+
+void SampleSlot::mouseDoubleClick (const juce::MouseEvent& e)
+{
+    if (waveArea.contains (e.getPosition())) openFileChooser();
+}
+
+void SampleSlot::openFileChooser()
+{
+    chooser = std::make_unique<juce::FileChooser> ("Load sample into Op " + juce::String (op + 1),
+                                                   juce::File::getSpecialLocation (juce::File::userMusicDirectory),
+                                                   "*.wav;*.aif;*.aiff;*.flac;*.mp3;*.ogg;*.caf;*.m4a");
+    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                          [this] (const juce::FileChooser& fc)
+                          {
+                              auto f = fc.getResult();
+                              if (f.existsAsFile()) proc.loadSampleAsync (op, f);
+                          });
+}
+
+bool SampleSlot::isInterestedInFileDrag (const juce::StringArray& files)
 {
     return files.size() == 1 && isAudioFile (files[0]);
 }
 
-void OpCard::filesDropped (const juce::StringArray& files, int, int)
+void SampleSlot::filesDropped (const juce::StringArray& files, int, int)
 {
     dragOver = false;
     repaint();
@@ -209,149 +241,259 @@ void OpCard::filesDropped (const juce::StringArray& files, int, int)
 }
 
 // ===========================================================================
-OperatorDetail::OperatorDetail (FerriteProcessor& p) : Section ("Operator 1"), proc (p), wave (p)
+juce::RangedAudioParameter* WaveView::paramPtr (const char* name) const
 {
-    for (auto* k : knobs()) addAndMakeVisible (k);
-    for (juce::Component* c : std::initializer_list<juce::Component*> { &mode, &fixed, &envView, &wave, &loopMode, &reverse, &keytrack,
-                                                                        &loadButton, &clearButton, &sampleInfo })
-        addAndMakeVisible (c);
+    return proc.apvts.getParameter (opId (opIndex, name));
+}
 
-    sampleInfo.setFont (FerriteLookAndFeel::font (11.0f));
-    sampleInfo.setColour (juce::Label::textColourId, Colours::textDim);
+float WaveView::param (const char* name) const { return getParam (proc, opId (opIndex, name)); }
 
-    clearButton.onClick = [this] { proc.clearSample (op); };
-    loadButton.onClick = [this]
+void WaveView::paint (juce::Graphics& g)
+{
+    auto r = getLocalBounds().toFloat();
+    g.setColour (Colours::panelHi);
+    g.fillRoundedRectangle (r, 8.0f);
+    const auto col = Colours::forOperator (opIndex);
+    auto asset = proc.getSample (opIndex);
+    const int mode = (int) param ("mode");
+    auto inner = r.reduced (8.0f, 6.0f);
+
+    if (asset != nullptr && mode != OpModeWave)
     {
-        chooser = std::make_unique<juce::FileChooser> ("Load sample into Op " + juce::String (op + 1),
-                                                       juce::File::getSpecialLocation (juce::File::userMusicDirectory),
-                                                       "*.wav;*.aif;*.aiff;*.flac;*.mp3;*.ogg;*.caf;*.m4a");
-        chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                              [this] (const juce::FileChooser& fc)
-                              {
-                                  auto f = fc.getResult();
-                                  if (f.existsAsFile()) proc.loadSampleAsync (op, f);
-                              });
-    };
-    setOperator (0);
-}
+        const int bins = (int) asset->overview.size() / 2;
+        const float mid = inner.getCentreY(), hh = inner.getHeight() * 0.48f;
+        g.setColour (col.withAlpha (0.85f));
+        for (int x = 0; x < (int) inner.getWidth(); ++x)
+        {
+            const int b = juce::jlimit (0, bins - 1, (int) ((float) x / inner.getWidth() * (float) bins));
+            const float mn = asset->overview[(size_t) b * 2], mx = asset->overview[(size_t) b * 2 + 1];
+            g.drawVerticalLine ((int) inner.getX() + x, mid - mx * hh, mid - mn * hh + 1.0f);
+        }
 
-std::vector<ParamKnob*> OperatorDetail::knobs()
-{
-    return { &coarse, &fine, &detune, &fixedHz, &level, &velSens, &feedback, &scan, &pan, &out,
-             &delay, &attack, &hold, &decay, &sustain, &release, &start, &loopStart, &loopEnd, &xfade, &root };
-}
-
-void OperatorDetail::setOperator (int newOp)
-{
-    op = newOp;
-    const auto col = Colours::forOperator (op);
-    setTitle ("Operator " + juce::String (op + 1));
-    setAccent (col);
-    auto& s = proc.apvts;
-    mode.attach (s, opId (op, "mode"));
-    coarse.attach (s, opId (op, "coarse"));     fine.attach (s, opId (op, "fine"));
-    detune.attach (s, opId (op, "detune"));     fixedHz.attach (s, opId (op, "fixedHz"));
-    fixed.attach (s, opId (op, "fixed"));
-    level.attach (s, opId (op, "level"));       velSens.attach (s, opId (op, "velSens"));
-    feedback.attach (s, opId (op, "feedback")); scan.attach (s, opId (op, "scan"));
-    pan.attach (s, opId (op, "pan"));           out.attach (s, opId (op, "out"));
-    delay.attach (s, opId (op, "delay"));       attack.attach (s, opId (op, "attack"));
-    hold.attach (s, opId (op, "hold"));         decay.attach (s, opId (op, "decay"));
-    sustain.attach (s, opId (op, "sustain"));   release.attach (s, opId (op, "release"));
-    start.attach (s, opId (op, "start"));       loopStart.attach (s, opId (op, "loopStart"));
-    loopEnd.attach (s, opId (op, "loopEnd"));   xfade.attach (s, opId (op, "xfade"));
-    root.attach (s, opId (op, "root"));
-    loopMode.attach (s, opId (op, "loopMode"));
-    reverse.attach (s, opId (op, "reverse"));   keytrack.attach (s, opId (op, "keytrack"));
-
-    for (auto* k : knobs()) k->slider.getProperties().set ("accent", col.toString());
-    envView.setColour (col);
-    wave.setOperator (op);
-    refresh();
-}
-
-void OperatorDetail::refresh()
-{
-    auto get = [&] (const char* n) { auto* pp = proc.apvts.getParameter (opId (op, n)); return pp->convertFrom0to1 (pp->getValue()); };
-    envView.setValues (get ("delay"), get ("attack"), get ("hold"), get ("decay"), get ("sustain"), get ("release"));
-    const bool isFixed = get ("fixed") > 0.5f;
-    coarse.setEnabled (! isFixed);
-    fine.setEnabled (! isFixed);
-    fixedHz.setEnabled (isFixed);
-
-    auto asset = proc.getSample (op);
-    const bool sampleMode = (int) get ("mode") == OpModeSample;
-    for (juce::Component* c : std::initializer_list<juce::Component*> { &start, &loopStart, &loopEnd, &xfade, &loopMode, &reverse })
-        c->setEnabled (sampleMode && asset != nullptr);
-    clearButton.setEnabled (asset != nullptr);
-
-    juce::String info;
-    if (asset)
-    {
-        info << asset->name << "  |  " << juce::String ((double) asset->length / asset->fileSampleRate, 2) << " s";
-        if (asset->detectedMidi > 0)
-            info << "  |  detected " << juce::MidiMessage::getMidiNoteName ((int) std::lround (asset->detectedMidi), true, true, 4)
-                 << " (" << juce::String ((asset->detectedMidi - std::round (asset->detectedMidi)) * 100.0f, 0) << " ct)";
-        else
-            info << "  |  no pitch";
-        info << "  |  " << asset->table.getNumFrames() << " frames";
+        auto X = [&] (float v) { return inner.getX() + v * inner.getWidth(); };
+        if (mode == OpModeSample)
+        {
+            const float ls = param ("loopStart"), le = param ("loopEnd"), st = param ("start");
+            if ((int) param ("loopMode") != LoopOff)
+            {
+                g.setColour (Colours::accent.withAlpha (0.10f));
+                g.fillRect (juce::Rectangle<float> (X (ls), r.getY(), X (le) - X (ls), r.getHeight()));
+                g.setColour (Colours::accent);
+                g.fillRect (X (ls) - 1.0f, r.getY(), 2.0f, r.getHeight());
+                g.fillRect (X (le) - 1.0f, r.getY(), 2.0f, r.getHeight());
+            }
+            g.setColour (Colours::text);
+            g.fillRect (X (st) - 1.0f, r.getY(), 2.0f, r.getHeight());
+        }
+        else   // Grain: позиция и разброс
+        {
+            const float pos = param ("scan"), spray = param ("grainSpray");
+            g.setColour (Colours::accent.withAlpha (0.14f));
+            g.fillRect (juce::Rectangle<float> (X (pos - spray * 0.5f), r.getY(), X (pos + spray * 0.5f) - X (pos - spray * 0.5f), r.getHeight()));
+            g.setColour (Colours::accent);
+            g.fillRect (X (pos) - 1.0f, r.getY(), 2.0f, r.getHeight());
+        }
     }
     else
     {
-        const auto err = proc.getLastError();
-        info = err.isNotEmpty() ? err : "Built-in wavetable: Sine > Sine+Oct > Tri > Square > Saw > Pulse > Narrow > Formant";
+        const Wavetable& t = asset ? asset->table : Wavetable::getBasic();
+        const float scanV = param ("scan");
+        // несколько соседних кадров «веером» + текущий
+        for (int k = 3; k >= 0; --k)
+        {
+            const float sv = juce::jlimit (0.0f, 1.0f, scanV - 0.06f * (float) k);
+            juce::Path p;
+            const int W = juce::jmax (2, (int) inner.getWidth());
+            const float off = (float) k * 6.0f;
+            for (int x = 0; x < W; ++x)
+            {
+                const float v = t.read ((double) x / (W - 1) * 0.999, sv, 0);
+                const float y = inner.getCentreY() - off - v * inner.getHeight() * 0.40f;
+                if (x == 0) p.startNewSubPath (inner.getX() + (float) x + off, y); else p.lineTo (inner.getX() + (float) x + off * (1.0f - (float) x / W), y);
+            }
+            g.setColour (k == 0 ? col : col.withAlpha (0.18f));
+            g.strokePath (p, juce::PathStrokeType (k == 0 ? 2.0f : 1.0f));
+        }
     }
-    sampleInfo.setText (info, juce::dontSendNotification);
+
+    g.setColour (Colours::textDim);
+    g.setFont (LoomLookAndFeel::font (10.0f));
+    const juce::String hint = asset == nullptr ? "built-in table" + midDot() + "drop a sample on the slot"
+                            : mode == OpModeSample ? "drag markers: start / loop" : mode == OpModeGrain ? "drag: position" : "";
+    g.drawText (hint, r.reduced (8, 4), juce::Justification::bottomRight);
+}
+
+void WaveView::mouseDown (const juce::MouseEvent& e)
+{
+    dragging = nullptr;
+    const int mode = (int) param ("mode");
+    if (proc.getSample (opIndex) == nullptr) return;
+    const float x = juce::jlimit (0.0f, 1.0f, (float) (e.x - 8) / (float) juce::jmax (1, getWidth() - 16));
+    if (mode == OpModeGrain || mode == OpModeWave)
+        dragging = paramPtr ("scan");
+    else
+    {
+        float best = 0.06f;
+        for (auto* n : { "start", "loopStart", "loopEnd" })
+        {
+            const float d = std::abs (param (n) - x);
+            if (d < best) { best = d; dragging = paramPtr (n); }
+        }
+    }
+    if (dragging)
+    {
+        dragging->beginChangeGesture();
+        mouseDrag (e);
+    }
+}
+
+void WaveView::mouseDrag (const juce::MouseEvent& e)
+{
+    if (dragging == nullptr) return;
+    const float x = juce::jlimit (0.0f, 1.0f, (float) (e.x - 8) / (float) juce::jmax (1, getWidth() - 16));
+    dragging->setValueNotifyingHost (dragging->convertTo0to1 (x));
+    repaint();
+}
+
+void WaveView::mouseUp (const juce::MouseEvent&)
+{
+    if (dragging) dragging->endChangeGesture();
+    dragging = nullptr;
+}
+
+// ===========================================================================
+OperatorPage::OperatorPage (LoomProcessor& p) : proc (p), wave (p)
+{
+    for (auto* k : allKnobs()) addChildComponent (k);
+    for (juce::Component* c : std::initializer_list<juce::Component*> { &on, &fixed, &keytrack, &loopMode })
+        addChildComponent (c);
+    addAndMakeVisible (wave);
+    setOperator (0);
+}
+
+std::vector<ParamKnob*> OperatorPage::allKnobs()
+{
+    return { &level, &coarse, &fine, &detune, &feedback, &velSens, &pan, &scan, &start, &loopStart, &loopEnd, &xfade,
+             &root, &grainSize, &grainDensity, &grainSpray, &fixedHz, &out };
+}
+
+void OperatorPage::setOperator (int newOp)
+{
+    op = newOp;
+    col = Colours::forOperator (op);
+    auto& s = proc.apvts;
+    level.attach (s, opId (op, "level"));        coarse.attach (s, opId (op, "coarse"));
+    fine.attach (s, opId (op, "fine"));          detune.attach (s, opId (op, "detune"));
+    feedback.attach (s, opId (op, "feedback"));  velSens.attach (s, opId (op, "velSens"));
+    pan.attach (s, opId (op, "pan"));            scan.attach (s, opId (op, "scan"));
+    start.attach (s, opId (op, "start"));        loopStart.attach (s, opId (op, "loopStart"));
+    loopEnd.attach (s, opId (op, "loopEnd"));    xfade.attach (s, opId (op, "xfade"));
+    root.attach (s, opId (op, "root"));          grainSize.attach (s, opId (op, "grainSize"));
+    grainDensity.attach (s, opId (op, "grainDensity")); grainSpray.attach (s, opId (op, "grainSpray"));
+    fixedHz.attach (s, opId (op, "fixedHz"));    out.attach (s, opId (op, "out"));
+    on.attach (s, opId (op, "on"));              fixed.attach (s, opId (op, "fixed"));
+    keytrack.attach (s, opId (op, "keytrack"));  loopMode.attach (s, opId (op, "loopMode"));
+    for (auto* k : allKnobs()) k->slider.getProperties().set ("accent", Colours::accent.toString());
+    wave.setOperator (op);
+    shownMode = -1;
+    refresh();
+}
+
+std::vector<juce::Component*> OperatorPage::secondRow()
+{
+    const int mode = (int) getParam (proc, opId (op, "mode"));
+    const bool isFixed = getParam (proc, opId (op, "fixed")) > 0.5f;
+    std::vector<juce::Component*> row;
+    switch (mode)
+    {
+        case OpModeSample: row = { &start, &loopStart, &loopEnd, &xfade, &root }; break;
+        case OpModeGrain:  row = { &scan, &grainSize, &grainDensity, &grainSpray, &root }; break;
+        default:           row = { &scan }; break;
+    }
+    if (isFixed) row.push_back (&fixedHz);
+    if ((int) getParam (proc, "algorithm") == 0) row.push_back (&out);
+    return row;
+}
+
+void OperatorPage::refresh()
+{
+    const int mode = (int) getParam (proc, opId (op, "mode"));
+    const bool isFixed = getParam (proc, opId (op, "fixed")) > 0.5f;
+    const bool matrix = (int) getParam (proc, "algorithm") == 0;
+    const int key = mode * 4 + (isFixed ? 2 : 0) + (matrix ? 1 : 0);
+    if (key != shownMode)
+    {
+        shownMode = key;
+        resized();
+    }
+    coarse.setEnabled (! isFixed);
+    fine.setEnabled (! isFixed);
     wave.repaint();
 }
 
-void OperatorDetail::resized()
+void OperatorPage::resized()
 {
-    auto r = getContentBounds();
-    const int kh = 62;
+    for (auto* k : allKnobs()) k->setVisible (false);
+    auto r = getLocalBounds();
+    const int rowH = 92;
 
-    // ряд 1: тон
-    auto row1 = r.removeFromTop (kh);
-    mode.setBounds (row1.removeFromLeft (90).withTrimmedTop (4).withTrimmedBottom (14));
-    row1.removeFromLeft (6);
-    fixed.setBounds (row1.removeFromLeft (64).withSizeKeepingCentre (64, 22));
-    layoutRow (row1, { &coarse, &fine, &detune, &fixedHz, &level, &velSens, &feedback, &scan, &pan, &out });
+    auto row1 = r.removeFromTop (rowH);
+    std::vector<juce::Component*> first { &level, &coarse, &fine, &detune, &feedback, &velSens, &pan };
+    for (auto* c : first) c->setVisible (true);
+    layoutRow (row1, first, 4, 96);
 
     r.removeFromTop (6);
-    // ряд 2: огибающая + график
-    auto row2 = r.removeFromTop (kh);
-    envView.setBounds (row2.removeFromRight (220).reduced (2));
-    row2.removeFromRight (6);
-    layoutRow (row2, { &delay, &attack, &hold, &decay, &sustain, &release });
+    auto bottom = r;
+    auto toggles = bottom.removeFromRight (120);
+    on.setVisible (true); fixed.setVisible (true);
+    on.setBounds (toggles.removeFromTop (24));
+    fixed.setBounds (toggles.removeFromTop (24));
+    const int mode = (int) getParam (proc, opId (op, "mode"));
+    keytrack.setVisible (mode != OpModeWave);
+    loopMode.setVisible (mode == OpModeSample);
+    if (keytrack.isVisible()) keytrack.setBounds (toggles.removeFromTop (24));
+    if (loopMode.isVisible()) loopMode.setBounds (toggles.removeFromTop (44).withTrimmedRight (6));
 
-    r.removeFromTop (6);
-    // ряд 3: семпл
-    auto info = r.removeFromBottom (18);
-    auto buttons = info.removeFromRight (130);
-    clearButton.setBounds (buttons.removeFromRight (60));
-    buttons.removeFromRight (6);
-    loadButton.setBounds (buttons);
-    sampleInfo.setBounds (info);
-    r.removeFromBottom (4);
-
-    auto controls = r.removeFromRight (440);
-    wave.setBounds (r.reduced (0, 2));
-    controls.removeFromLeft (8);
-    auto toggles = controls.removeFromRight (90);
-    loopMode.setBounds (toggles.removeFromTop (40));
-    reverse.setBounds (toggles.removeFromTop (22));
-    keytrack.setBounds (toggles.removeFromTop (22));
-    layoutRow (controls.withSizeKeepingCentre (controls.getWidth(), juce::jmin (controls.getHeight(), kh)),
-               { &start, &loopStart, &loopEnd, &xfade, &root });
+    bottom.removeFromRight (8);
+    auto row2 = secondRow();
+    for (auto* c : row2) c->setVisible (true);
+    const int knobsW = juce::jmin ((int) row2.size() * 96, bottom.getWidth() / 2 + 40);
+    auto knobArea = bottom.removeFromRight (knobsW);
+    layoutRow (knobArea.withSizeKeepingCentre (knobArea.getWidth(), juce::jmin (rowH, knobArea.getHeight())), row2, 2, 96);
+    bottom.removeFromRight (8);
+    wave.setBounds (bottom);
 }
 
-bool OperatorDetail::isInterestedInFileDrag (const juce::StringArray& files)
+// ===========================================================================
+EnvelopePage::EnvelopePage (LoomProcessor& p) : proc (p)
 {
-    return files.size() == 1 && isAudioFile (files[0]);
+    for (auto* k : { &delay, &attack, &hold, &decay, &sustain, &release }) addAndMakeVisible (k);
+    addAndMakeVisible (view);
+    setOperator (0);
 }
 
-void OperatorDetail::filesDropped (const juce::StringArray& files, int, int)
+void EnvelopePage::setOperator (int newOp)
 {
-    if (files.size() > 0) proc.loadSampleAsync (op, juce::File (files[0]));
+    op = newOp;
+    auto& s = proc.apvts;
+    delay.attach (s, opId (op, "delay"));     attack.attach (s, opId (op, "attack"));
+    hold.attach (s, opId (op, "hold"));       decay.attach (s, opId (op, "decay"));
+    sustain.attach (s, opId (op, "sustain")); release.attach (s, opId (op, "release"));
+    view.setColour (Colours::forOperator (op));
+    refresh();
 }
-} // namespace ferrite
+
+void EnvelopePage::refresh()
+{
+    auto get = [&] (const char* n) { return getParam (proc, opId (op, n)); };
+    view.setValues (get ("delay"), get ("attack"), get ("hold"), get ("decay"), get ("sustain"), get ("release"));
+}
+
+void EnvelopePage::resized()
+{
+    auto r = getLocalBounds();
+    layoutRow (r.removeFromTop (92), { &delay, &attack, &hold, &decay, &sustain, &release });
+    r.removeFromTop (8);
+    view.setBounds (r);
+}
+} // namespace loom

@@ -1,23 +1,35 @@
 #include "Widgets.h"
 
-namespace ferrite
+namespace loom
 {
 ParamKnob::ParamKnob (const juce::String& text, juce::Colour accent)
 {
     slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 14);
+    slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     slider.setRotaryParameters (juce::degreesToRadians (225.0f), juce::degreesToRadians (495.0f), true);
     slider.getProperties().set ("accent", accent.toString());
-    slider.setPopupDisplayEnabled (false, false, nullptr);
     slider.setDoubleClickReturnValue (true, 0.0);
+    slider.setMouseDragSensitivity (220);
+    slider.onValueChange = [this] { updateValue(); };
     addAndMakeVisible (slider);
 
     label.setText (text, juce::dontSendNotification);
     label.setJustificationType (juce::Justification::centred);
-    label.setFont (FerriteLookAndFeel::font (11.0f));
-    label.setColour (juce::Label::textColourId, Colours::textDim);
+    label.setFont (LoomLookAndFeel::font (11.5f, true));
+    label.setColour (juce::Label::textColourId, Colours::text);
     label.setInterceptsMouseClicks (false, false);
     addAndMakeVisible (label);
+
+    value.setJustificationType (juce::Justification::centred);
+    value.setFont (LoomLookAndFeel::font (10.5f));
+    value.setColour (juce::Label::textColourId, Colours::textDim);
+    value.setInterceptsMouseClicks (false, false);
+    addAndMakeVisible (value);
+}
+
+void ParamKnob::updateValue()
+{
+    value.setText (slider.getTextFromValue (slider.getValue()), juce::dontSendNotification);
 }
 
 void ParamKnob::attach (APVTS& state, const juce::String& id)
@@ -26,20 +38,22 @@ void ParamKnob::attach (APVTS& state, const juce::String& id)
     attachment = std::make_unique<APVTS::SliderAttachment> (state, id, slider);
     if (auto* p = state.getParameter (id))
         slider.setDoubleClickReturnValue (true, p->convertFrom0to1 (p->getDefaultValue()));
+    updateValue();
 }
 
 void ParamKnob::detach() { attachment.reset(); }
 
 void ParamKnob::resized()
 {
+    // [круг] [имя] [значение] — по центру ячейки
     auto r = getLocalBounds();
-    label.setBounds (r.removeFromTop (13));
-    slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, r.getWidth(), 14);
-    // ограничиваем размер ручки, чтобы в больших ячейках они не раздувались
-    const int maxKnob = 46;
-    if (r.getHeight() - 14 > maxKnob)
-        r = r.withSizeKeepingCentre (r.getWidth(), maxKnob + 14);
-    slider.setBounds (r);
+    const int nameH = 15, valH = 13;
+    const int knob = juce::jlimit (20, 54, juce::jmin (r.getWidth() - 6, r.getHeight() - nameH - valH - 4));
+    auto area = r.withSizeKeepingCentre (r.getWidth(), knob + 4 + nameH + valH);
+    slider.setBounds (area.removeFromTop (knob).withSizeKeepingCentre (knob, knob));
+    area.removeFromTop (4);
+    label.setBounds (area.removeFromTop (nameH));
+    value.setBounds (area.removeFromTop (valH));
 }
 
 ParamChoice::ParamChoice (const juce::String& text)
@@ -48,7 +62,7 @@ ParamChoice::ParamChoice (const juce::String& text)
     if (text.isNotEmpty())
     {
         label.setText (text, juce::dontSendNotification);
-        label.setFont (FerriteLookAndFeel::font (11.0f));
+        label.setFont (LoomLookAndFeel::font (11.0f, true));
         label.setColour (juce::Label::textColourId, Colours::textDim);
         label.setJustificationType (juce::Justification::centredLeft);
         addAndMakeVisible (label);
@@ -67,30 +81,44 @@ void ParamChoice::attach (APVTS& state, const juce::String& id)
 void ParamChoice::resized()
 {
     auto r = getLocalBounds();
-    if (label.isVisible() && label.getText().isNotEmpty())
-        label.setBounds (r.removeFromTop (13));
-    box.setBounds (r.withSizeKeepingCentre (r.getWidth(), juce::jmin (r.getHeight(), 24)));
+    if (label.getText().isNotEmpty())
+        label.setBounds (r.removeFromTop (15));
+    box.setBounds (r.withSizeKeepingCentre (r.getWidth(), juce::jmin (r.getHeight(), 26)));
+}
+
+void drawCard (juce::Graphics& g, juce::Rectangle<float> r, float radius, bool shadow)
+{
+    if (shadow)
+    {
+        juce::Path p;
+        p.addRoundedRectangle (r, radius);
+        juce::DropShadow (juce::Colours::black.withAlpha (0.06f), 10, { 0, 2 }).drawForPath (g, p);
+    }
+    g.setColour (Colours::panel);
+    g.fillRoundedRectangle (r, radius);
+    g.setColour (Colours::outline);
+    g.drawRoundedRectangle (r.reduced (0.5f), radius, 1.0f);
 }
 
 void Section::paint (juce::Graphics& g)
 {
-    auto r = getLocalBounds().toFloat().reduced (0.5f);
-    g.setColour (Colours::panel);
-    g.fillRoundedRectangle (r, 6.0f);
-    g.setColour (Colours::outline);
-    g.drawRoundedRectangle (r, 6.0f, 1.0f);
-    g.setColour (accent);
-    g.fillRoundedRectangle (juce::Rectangle<float> (8.0f, 9.0f, 3.0f, 10.0f), 1.5f);
+    if (flat) return;
+    drawCard (g, getLocalBounds().toFloat(), 10.0f, false);
     g.setColour (Colours::text);
-    g.setFont (FerriteLookAndFeel::font (12.0f, true));
-    g.drawText (title.toUpperCase(), juce::Rectangle<int> (16, 4, getWidth() - 24, 20), juce::Justification::centredLeft);
+    g.setFont (LoomLookAndFeel::font (12.5f, true));
+    g.drawText (title, juce::Rectangle<int> (12, 7, getWidth() - 24, 18), juce::Justification::centredLeft);
 }
 
 void layoutRow (juce::Rectangle<int> area, std::initializer_list<juce::Component*> items, int gap)
 {
+    layoutRow (area, std::vector<juce::Component*> (items), gap);
+}
+
+void layoutRow (juce::Rectangle<int> area, const std::vector<juce::Component*>& items, int gap, int maxWidth)
+{
     const int n = (int) items.size();
     if (n == 0) return;
-    const int w = (area.getWidth() - gap * (n - 1)) / n;
+    const int w = juce::jmin (maxWidth, (area.getWidth() - gap * (n - 1)) / n);
     for (auto* c : items)
     {
         if (c != nullptr) c->setBounds (area.removeFromLeft (w));
@@ -114,18 +142,20 @@ void layoutGrid (juce::Rectangle<int> area, int cols, const std::vector<juce::Co
 
 void EnvelopeView::paint (juce::Graphics& g)
 {
-    auto r = getLocalBounds().toFloat().reduced (2.0f);
-    g.setColour (Colours::bg);
-    g.fillRoundedRectangle (r, 4.0f);
+    auto r = getLocalBounds().toFloat().reduced (1.0f);
+    g.setColour (Colours::panelHi);
+    g.fillRoundedRectangle (r, 8.0f);
 
-    // время каждого этапа в «визуальных» единицах (корень — чтобы короткие этапы были видны)
     auto vis = [] (float t) { return std::sqrt (juce::jmax (0.0f, t)) + 0.02f; };
     const float d = vis (vals[0]), a = vis (vals[1]), h = vis (vals[2]), dec = vis (vals[3]), rel = vis (vals[5]);
     const float sus = vals[4];
     const float susLen = 0.6f;
     const float total = d + a + h + dec + susLen + rel;
-    auto X = [&] (float t) { return r.getX() + 4 + (r.getWidth() - 8) * t / total; };
-    auto Y = [&] (float v) { return r.getBottom() - 4 - (r.getHeight() - 8) * v; };
+    auto X = [&] (float t) { return r.getX() + 10 + (r.getWidth() - 20) * t / total; };
+    auto Y = [&] (float v) { return r.getBottom() - 10 - (r.getHeight() - 20) * v; };
+
+    g.setColour (Colours::outline);
+    for (int i = 1; i < 4; ++i) g.drawHorizontalLine ((int) Y ((float) i / 4.0f), r.getX() + 6, r.getRight() - 6);
 
     juce::Path p;
     float t = 0;
@@ -134,65 +164,26 @@ void EnvelopeView::paint (juce::Graphics& g)
     t += a;   p.lineTo (X (t), Y (1));
     t += h;   p.lineTo (X (t), Y (1));
     const float t0 = t;
-    for (int i = 1; i <= 16; ++i)
+    for (int i = 1; i <= 24; ++i)
     {
-        const float k = (float) i / 16.0f;
+        const float k = (float) i / 24.0f;
         p.lineTo (X (t0 + dec * k), Y (sus + (1 - sus) * std::exp (-5.0f * k)));
     }
     t += dec;
     t += susLen; p.lineTo (X (t), Y (sus));
     const float t1 = t;
-    for (int i = 1; i <= 16; ++i)
+    for (int i = 1; i <= 24; ++i)
     {
-        const float k = (float) i / 16.0f;
+        const float k = (float) i / 24.0f;
         p.lineTo (X (t1 + rel * k), Y (sus * std::exp (-5.0f * k)));
     }
 
     juce::Path fill (p);
     fill.lineTo (X (total), Y (0));
     fill.closeSubPath();
-    g.setColour (colour.withAlpha (0.15f));
+    g.setColour (colour.withAlpha (0.10f));
     g.fillPath (fill);
     g.setColour (colour);
-    g.strokePath (p, juce::PathStrokeType (1.6f));
+    g.strokePath (p, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 }
-
-void ScopeView::push (const float* data, int n)
-{
-    for (int i = 0; i < n; ++i)
-    {
-        buf[(size_t) write] = data[i];
-        write = (write + 1) % (int) buf.size();
-    }
-}
-
-void ScopeView::paint (juce::Graphics& g)
-{
-    auto r = getLocalBounds().toFloat();
-    g.setColour (Colours::bg);
-    g.fillRoundedRectangle (r, 4.0f);
-    g.setColour (Colours::outline);
-    g.drawRoundedRectangle (r.reduced (0.5f), 4.0f, 1.0f);
-
-    // триггер по переходу через ноль
-    const int N = (int) buf.size();
-    const int show = 512;
-    int startIdx = (write - show - 256 + N * 2) % N;
-    for (int i = 0; i < 256; ++i)
-    {
-        const int a = (startIdx + i) % N, b = (startIdx + i + 1) % N;
-        if (buf[(size_t) a] <= 0.0f && buf[(size_t) b] > 0.0f) { startIdx = b; break; }
-    }
-
-    juce::Path p;
-    for (int i = 0; i < show; ++i)
-    {
-        const float v = juce::jlimit (-1.0f, 1.0f, buf[(size_t) ((startIdx + i) % N)]);
-        const float x = r.getX() + r.getWidth() * (float) i / (float) (show - 1);
-        const float y = r.getCentreY() - v * r.getHeight() * 0.45f;
-        if (i == 0) p.startNewSubPath (x, y); else p.lineTo (x, y);
-    }
-    g.setColour (Colours::accent2);
-    g.strokePath (p, juce::PathStrokeType (1.3f));
-}
-} // namespace ferrite
+} // namespace loom

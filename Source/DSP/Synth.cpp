@@ -1,6 +1,6 @@
 #include "Synth.h"
 
-namespace ferrite
+namespace loom
 {
 // глубина фазовой модуляции (в циклах) при Level=100% и FM Amount=100%
 static constexpr float kModScale = 1.5f;
@@ -93,6 +93,8 @@ float Voice::getLoudness() const noexcept
 void Voice::initSampleState (int u, int i, const OpSnap& o) noexcept
 {
     sdone[u][i] = false;
+    grainTimer[u][i] = 0.0f;
+    for (auto& g : grains[u][i]) g.on = false;
     if (o.asset == nullptr) { spos[u][i] = 0; sdir[u][i] = 1; return; }
     const double len = o.asset->length;
     if (o.reverse) { spos[u][i] = (len - 1.0) * (1.0 - o.start); sdir[u][i] = -1; }
@@ -206,8 +208,8 @@ inline float Voice::readSample (int u, int i, const OpSnap& o, double pmCycles) 
         {
             const float t = (float) ((rp - (le - xf)) / xf);
             auto wrap = [len] (double p) { p = std::fmod (p, len); return p < 0 ? p + len : p; };
-            const float va = a.readCubic (wrap (rp));
-            const float vb = a.readCubic (wrap (rp - (le - ls)));
+            const float va = a.read (wrap (rp), hermiteRead);
+            const float vb = a.read (wrap (rp - (le - ls)), hermiteRead);
             // равномощный кроссфейд
             return va * std::sqrt (1.0f - t) + vb * std::sqrt (t);
         }
@@ -215,7 +217,55 @@ inline float Voice::readSample (int u, int i, const OpSnap& o, double pmCycles) 
 
     rp = std::fmod (rp, len);
     if (rp < 0) rp += len;
-    return a.readCubic (rp);
+    return a.read (rp, hermiteRead);
+}
+
+inline float Voice::renderGrains (int u, int i, const OpSnap& o, double pmCycles, double inc, float scanPos, bool hermite) noexcept
+{
+    const SampleAsset& a = *o.asset;
+    const double len = a.length;
+    const float grainLen = juce::jmax (16.0f, o.grainSize * (float) sampleRate);
+    const float density = juce::jlimit (1.0f, (float) kMaxGrains, o.grainDensity);
+
+    // запуск нового зерна
+    float& timer = grainTimer[u][i];
+    timer -= 1.0f;
+    if (timer <= 0.0f)
+    {
+        for (auto& g : grains[u][i])
+            if (! g.on)
+            {
+                const float spray = o.grainSpray * (rng.nextFloat() - 0.5f);
+                const double p = juce::jlimit (0.0, len - 1.0, (double) (scanPos + spray) * len);
+                g.pos = p;
+                g.age = 0.0f;
+                g.len = grainLen;
+                g.dir = o.reverse ? -1 : 1;
+                g.on = true;
+                break;
+            }
+        timer += grainLen / density * (1.0f + o.grainSpray * 0.5f * (rng.nextFloat() - 0.5f));
+    }
+
+    const double period = a.fileSampleRate / midiToHz ((float) o.root);
+    const double offset = pmCycles * period;
+    float sum = 0.0f;
+    for (auto& g : grains[u][i])
+    {
+        if (! g.on) continue;
+        const float t = g.age / g.len;
+        const float w = 4.0f * t * (1.0f - t);          // параболическое окно
+        double rp = std::fmod (g.pos + offset, len);
+        if (rp < 0) rp += len;
+        sum += w * a.read (rp, hermite);
+        g.pos += inc * g.dir;
+        if (g.pos >= len) g.pos -= len;
+        else if (g.pos < 0) g.pos += len;
+        g.age += 1.0f;
+        if (g.age >= g.len) g.on = false;
+    }
+    // сумма перекрывающихся парабол ≈ density * 2/3
+    return sum / juce::jmax (1.0f, density * 0.6667f);
 }
 
 inline void Voice::advanceSample (int u, int i, const OpSnap& o, double inc) noexcept
@@ -316,13 +366,15 @@ void Voice::renderChunk (float* L, float* R, int n, int lfoIndex, const BlockCon
     int mip[kNumOps];
     Wavetable::Cursor cur[kNumOps];
     float gL[kMaxUnison][kNumOps], gR[kMaxUnison][kNumOps];
-    bool useSample[kNumOps];
+    bool useSample[kNumOps], useGrain[kNumOps];
+    hermiteRead = s.hermite;
 
     for (int i = 0; i < kNumOps; ++i)
     {
         const OpSnap& o = s.op[(size_t) i];
         opActive[i] = o.on && ! env[(size_t) i].isIdle();
-        useSample[i] = o.mode == OpModeSample && o.asset != nullptr;
+        useSample[i] = (o.mode == OpModeSample || o.mode == OpModeGrain) && o.asset != nullptr;
+        useGrain[i] = o.mode == OpModeGrain && o.asset != nullptr;
         if (! opActive[i]) { amp[i] = 0; continue; }
 
         if (useSample[i] && o.asset->length != lastAssetLength[i])
@@ -417,7 +469,11 @@ void Voice::renderChunk (float* L, float* R, int n, int lfoIndex, const BlockCon
                 const double ph = (double) (pm * fmAmt + fbAmt[i] * (fb1[u][i] + fb2[u][i]) * 0.5f);
 
                 float v;
-                if (useSample[i])
+                if (useGrain[i])
+                {
+                    v = renderGrains (u, i, op, ph, inc[i] * uniMul[u], scan[i], s.hermite);
+                }
+                else if (useSample[i])
                 {
                     v = readSample (u, i, op, ph);
                     advanceSample (u, i, op, inc[i] * uniMul[u]);
@@ -500,8 +556,24 @@ void Synth::prepare (double sr, int maxBlock)
     sampleRate = sr;
     for (auto& v : voices) v.prepare (sr);
     for (auto& l : lfo) l.reset (sr);
-    for (auto& lv : lfoValues) lv.assign ((size_t) (maxBlock / kSubBlock + 2), 0.0f);
+    // запас под 4x оверсемплинг
+    for (auto& lv : lfoValues) lv.assign ((size_t) (maxBlock * 4 / kSubBlock + 2), 0.0f);
     monoStack.reserve (128);
+}
+
+void Synth::setSampleRate (double sr)
+{
+    sampleRate = sr;
+    for (auto& v : voices) { v.setSampleRate (sr); v.kill(); }
+    for (auto& l : lfo) l.setSampleRate (sr);
+}
+
+int Synth::getLowestHeldNote() const noexcept
+{
+    int lowest = -1;
+    for (auto& v : voices)
+        if (v.isActive() && ! v.isReleasing() && (lowest < 0 || v.getNote() < lowest)) lowest = v.getNote();
+    return lowest;
 }
 
 void Synth::reset()
@@ -577,6 +649,7 @@ void Synth::noteOn (int note, float vel, const Snapshot& s)
 
 void Synth::noteOff (int note, const Snapshot& s)
 {
+    if (s.drone) return;   // Drone: ноты «залипают» до выключения режима
     if (s.polyMode != PolyPoly)
     {
         monoStack.erase (std::remove (monoStack.begin(), monoStack.end(), note), monoStack.end());
@@ -603,9 +676,15 @@ void Synth::noteOff (int note, const Snapshot& s)
 void Synth::handleMidi (const juce::MidiMessage& m, const Snapshot& s)
 {
     if (m.isNoteOn())
+    {
+        keyDown[m.getNoteNumber() & 127] = true;
         noteOn (m.getNoteNumber(), m.getFloatVelocity(), s);
+    }
     else if (m.isNoteOff())
+    {
+        keyDown[m.getNoteNumber() & 127] = false;
         noteOff (m.getNoteNumber(), s);
+    }
     else if (m.isPitchWheel())
         bendNorm = (float) (m.getPitchWheelValue() - 8192) / 8192.0f;
     else if (m.isChannelPressure())
@@ -640,6 +719,21 @@ void Synth::render (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi, co
         monoStack.clear();
         lastPolyMode = snap.polyMode;
     }
+
+    if (lastDrone && ! snap.drone)
+    {
+        // Drone выключили — отпускаем всё, что не зажато физически
+        if (snap.polyMode != PolyPoly)
+        {
+            monoStack.erase (std::remove_if (monoStack.begin(), monoStack.end(), [this] (int n) { return ! keyDown[n & 127]; }),
+                             monoStack.end());
+            if (monoStack.empty()) voices[0].release();
+        }
+        else
+            for (auto& v : voices)
+                if (v.isActive() && ! keyDown[v.getNote() & 127] && ! sustainPedal) v.release();
+    }
+    lastDrone = snap.drone;
 
     for (int l = 0; l < 2; ++l)
         lfo[(size_t) l].process (snap.lfo[l], info, numSamples, lfoValues[l]);
@@ -678,4 +772,4 @@ void Synth::render (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi, co
     if (R == L)   // моно-выход: среднее
         juce::FloatVectorOperations::multiply (L, 0.5f, numSamples);
 }
-} // namespace ferrite
+} // namespace loom

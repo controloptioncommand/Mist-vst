@@ -1,4 +1,4 @@
-# Ferrite — sample-based FM synth
+# Loom — sample-based FM synth
 
 Личный VST3/AU-инструмент: 6 операторов, фазовая модуляция, где источником каждого оператора может быть семпл.
 
@@ -14,15 +14,15 @@
 - Фильтр: LP12, LP24, BP, HP, Notch, с drive, keytrack и модуляционной огибающей.
 - 2 LFO: 7 форм, синхронизация с темпом и транспортом.
 - Mod Matrix на 8 слотов. Источники: LFO, Mod Env, Velocity, Key, Mod Wheel, Aftertouch, Random. Назначения: глобальные параметры, а также Level / Pitch / Scan / Feedback каждого оператора.
-- Пресеты (`~/Music/Ferrite/Presets/*.ferrite`) хранят семплы внутри файла (FLAC). Проект DAW тоже хранит семплы внутри.
+- Пресеты (`~/Music/Loom/Presets/*.loom`) хранят семплы внутри файла (FLAC). Проект DAW тоже хранит семплы внутри.
 - Окно масштабируется от 50% до 200%.
 
 ## Установка на macOS
 
-1. Откройте вкладку **Actions** репозитория, выберите последний успешный запуск **Build macOS** и скачайте артефакт `Ferrite-macOS`.
+1. Откройте вкладку **Actions** репозитория, выберите последний успешный запуск **Build macOS** и скачайте артефакт `Loom-macOS`.
 2. Распакуйте архив и выполните в Терминале:
    ```bash
-   bash ~/Downloads/Ferrite-macOS/install-mac.sh
+   bash ~/Downloads/Loom-macOS/install-mac.sh
    ```
 3. В Ableton Live: **Settings → Plug-Ins → Rescan**.
 
@@ -30,14 +30,14 @@
 
 ```bash
 cmake -B build -G Xcode
-cmake --build build --config Release --target Ferrite_VST3 Ferrite_AU
+cmake --build build --config Release --target Loom_VST3 Loom_AU
 ```
 
 Офлайн-тест (рендер пресетов в WAV, проверка NaN, перегрузки и скорости):
 
 ```bash
-cmake -B build -DFERRITE_BUILD_TESTS=ON && cmake --build build --target FerriteRenderTest
-./build/FerriteRenderTest_artefacts/Release/FerriteRenderTest ./render
+cmake -B build -DLOOM_BUILD_TESTS=ON && cmake --build build --target LoomRenderTest
+./build/LoomRenderTest_artefacts/Release/LoomRenderTest ./render
 ```
 
 ## Структура

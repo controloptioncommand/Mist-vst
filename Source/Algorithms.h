@@ -3,7 +3,7 @@
 #include <array>
 #include <cstdint>
 
-namespace ferrite
+namespace loom
 {
 struct Algorithm
 {
@@ -15,4 +15,4 @@ struct Algorithm
 };
 
 const Algorithm& getAlgorithm (int index);   // 0..kNumAlgorithms-1
-} // namespace ferrite
+} // namespace loom

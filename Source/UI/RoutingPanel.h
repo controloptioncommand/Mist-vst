@@ -2,7 +2,7 @@
 #include "Widgets.h"
 #include "../PluginProcessor.h"
 
-namespace ferrite
+namespace loom
 {
 // Текущая маршрутизация (алгоритм или матрица) в одном виде
 struct Routing
@@ -13,19 +13,19 @@ struct Routing
     bool on[kNumOps] {};
     bool isMatrix = false;
     int algorithm = 0;   // 0 = matrix
-    static Routing read (FerriteProcessor& p);
+    static Routing read (LoomProcessor& p);
 };
 
 class AlgorithmDiagram : public juce::Component
 {
 public:
-    explicit AlgorithmDiagram (FerriteProcessor& p) : proc (p) {}
+    explicit AlgorithmDiagram (LoomProcessor& p) : proc (p) {}
     void paint (juce::Graphics& g) override;
     std::function<void (int)> onOperatorClicked;
     void mouseDown (const juce::MouseEvent& e) override;
 
 private:
-    FerriteProcessor& proc;
+    LoomProcessor& proc;
     std::array<juce::Point<float>, kNumOps> nodePos {};
     float nodeR = 14.0f;
 };
@@ -34,7 +34,7 @@ private:
 class MatrixGrid : public juce::Component
 {
 public:
-    explicit MatrixGrid (FerriteProcessor& p) : proc (p) {}
+    explicit MatrixGrid (LoomProcessor& p) : proc (p) {}
     void paint (juce::Graphics& g) override;
     void mouseDown (const juce::MouseEvent& e) override;
     void mouseDrag (const juce::MouseEvent& e) override;
@@ -44,7 +44,7 @@ public:
 private:
     juce::Rectangle<float> cellRect (int row, int col) const;
     juce::RangedAudioParameter* paramFor (int row, int col) const;
-    FerriteProcessor& proc;
+    LoomProcessor& proc;
     juce::RangedAudioParameter* dragParam = nullptr;
     float dragStartValue = 0;
 };
@@ -52,17 +52,17 @@ private:
 class RoutingPanel : public Section
 {
 public:
-    explicit RoutingPanel (FerriteProcessor& p);
+    explicit RoutingPanel (LoomProcessor& p);
     void resized() override;
     void refresh();
     AlgorithmDiagram diagram;
 
 private:
     void copyAlgorithmToMatrix();
-    FerriteProcessor& proc;
+    LoomProcessor& proc;
     ParamChoice algo;
     juce::TextButton prev { "<" }, next { ">" }, toMatrix { "Edit as Matrix" };
     MatrixGrid grid;
     juce::Label hint;
 };
-} // namespace ferrite
+} // namespace loom

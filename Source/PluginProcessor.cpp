@@ -2,11 +2,11 @@
 #include "PluginEditor.h"
 #include "Algorithms.h"
 
-namespace ferrite
+namespace loom
 {
-FerriteProcessor::FerriteProcessor()
+LoomProcessor::LoomProcessor()
     : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
-      apvts (*this, nullptr, "FERRITE", createParameterLayout()),
+      apvts (*this, nullptr, "LOOM", createParameterLayout()),
       presets (*this)
 {
     auto P = [this] (const juce::String& id)
@@ -33,6 +33,8 @@ FerriteProcessor::FerriteProcessor()
         o.loopEnd = P (opId (i, "loopEnd")); o.xfade = P (opId (i, "xfade"));
         o.loopMode = P (opId (i, "loopMode")); o.reverse = P (opId (i, "reverse"));
         o.root = P (opId (i, "root"));       o.keytrack = P (opId (i, "keytrack"));
+        o.grainSize = P (opId (i, "grainSize")); o.grainDensity = P (opId (i, "grainDensity"));
+        o.grainSpray = P (opId (i, "grainSpray"));
         for (int d = 0; d < kNumOps; ++d)
             if (d != i) mat[i][d] = P (matId (i, d));
     }
@@ -40,6 +42,7 @@ FerriteProcessor::FerriteProcessor()
     pAlgorithm = P ("algorithm"); pFm = P ("fmAmount"); pMaster = P ("master");
     pPolyMode = P ("polyMode"); pGlide = P ("glide"); pBend = P ("bendRange");
     pUniVoices = P ("uniVoices"); pUniDetune = P ("uniDetune"); pUniSpread = P ("uniSpread");
+    pDrone = P ("drone"); pInterp = P ("interp"); pOversampling = P ("oversampling");
     pFilterOn = P ("filterOn"); pFilterType = P ("filterType"); pCutoff = P ("cutoff"); pReso = P ("reso");
     pFilterEnv = P ("filterEnv"); pFilterKey = P ("filterKey"); pDrive = P ("drive");
     pMA = P ("menv_attack"); pMD = P ("menv_decay"); pMS = P ("menv_sustain"); pMR = P ("menv_release");
@@ -56,28 +59,37 @@ FerriteProcessor::FerriteProcessor()
     (void) Wavetable::getBasic();   // построить таблицу заранее, не в аудиопотоке
 }
 
-FerriteProcessor::~FerriteProcessor()
+LoomProcessor::~LoomProcessor()
 {
     alive->store (false);
     loaderPool.removeAllJobs (true, 5000);
 }
 
-bool FerriteProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
+bool LoomProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
     const auto& out = layouts.getMainOutputChannelSet();
     return out == juce::AudioChannelSet::stereo() || out == juce::AudioChannelSet::mono();
 }
 
-void FerriteProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+void LoomProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    currentSampleRate = sampleRate;
-    synth.prepare (sampleRate, juce::jmax (samplesPerBlock, 4096));
+    hostSampleRate = sampleRate;
+    maxBlock = juce::jmax (samplesPerBlock, 4096);
+    using OS = juce::dsp::Oversampling<float>;
+    for (int k = 1; k <= 2; ++k)
+    {
+        oversamplers[(size_t) k] = std::make_unique<OS> (2, (size_t) k, OS::filterHalfBandPolyphaseIIR, true, false);
+        oversamplers[(size_t) k]->initProcessing ((size_t) maxBlock);
+    }
+    scaledMidi.ensureSize (4096);
+    synth.prepare (sampleRate, maxBlock);
+    osIndex = -1;   // применится в первом processBlock
 }
 
 // ---------------------------------------------------------------------------
-void FerriteProcessor::buildSnapshot()
+void LoomProcessor::buildSnapshot()
 {
-    const double sr = currentSampleRate;
+    const double sr = currentSampleRate;   // эффективная частота (с учётом оверсемплинга)
     auto b = [] (std::atomic<float>* p) { return p->load() > 0.5f; };
     auto f = [] (std::atomic<float>* p) { return p->load(); };
     auto iv = [] (std::atomic<float>* p) { return (int) std::lround (p->load()); };
@@ -106,6 +118,9 @@ void FerriteProcessor::buildSnapshot()
         o.reverse = b (p.reverse);
         o.root = iv (p.root);
         o.keytrack = b (p.keytrack);
+        o.grainSize = f (p.grainSize);
+        o.grainDensity = f (p.grainDensity);
+        o.grainSpray = f (p.grainSpray);
         // asset/table выставляются в processBlock из удерживаемых на блок ссылок
     }
 
@@ -149,6 +164,8 @@ void FerriteProcessor::buildSnapshot()
     snap.uniVoices = iv (pUniVoices);
     snap.uniDetune = f (pUniDetune);
     snap.uniSpread = f (pUniSpread);
+    snap.drone = b (pDrone);
+    snap.hermite = iv (pInterp) == InterpHermite;
 
     snap.filterOn = b (pFilterOn);
     snap.filterType = iv (pFilterType);
@@ -178,9 +195,23 @@ void FerriteProcessor::buildSnapshot()
     }
 }
 
-void FerriteProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+void LoomProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
+    const auto t0 = juce::Time::getHighResolutionTicks();
+    const int numSamples = buffer.getNumSamples();
+    for (int c = 2; c < buffer.getNumChannels(); ++c) buffer.clear (c, 0, numSamples);
+
+    // оверсемплинг: 0 = 1x, 1 = 2x, 2 = 4x
+    const int wantOs = juce::jlimit (0, 2, (int) std::lround (pOversampling->load()));
+    if (wantOs != osIndex)
+    {
+        osIndex = wantOs;
+        currentSampleRate = hostSampleRate * (1 << osIndex);
+        synth.setSampleRate (currentSampleRate);
+        if (osIndex > 0) oversamplers[(size_t) osIndex]->reset();
+        setLatencySamples (osIndex > 0 ? (int) std::lround (oversamplers[(size_t) osIndex]->getLatencyInSamples()) : 0);
+    }
 
     // держим ссылки на ассеты этого блока
     std::array<std::shared_ptr<const SampleAsset>, kNumOps> hold;
@@ -202,43 +233,69 @@ void FerriteProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
             blockInfo.playing = pos->getIsPlaying();
         }
 
-    synth.render (buffer, midi, snap, blockInfo);
+    if (osIndex == 0 || buffer.getNumChannels() < 2)
+    {
+        synth.render (buffer, midi, snap, blockInfo);
+    }
+    else
+    {
+        auto& os = *oversamplers[(size_t) osIndex];
+        const int factor = 1 << osIndex;
+        juce::dsp::AudioBlock<float> block (buffer.getArrayOfWritePointers(), 2, (size_t) numSamples);
+        block.clear();
+        auto up = os.processSamplesUp (block);   // получаем буфер повышенной частоты (вход — тишина)
+        float* chans[2] = { up.getChannelPointer (0), up.getChannelPointer (1) };
+        juce::AudioBuffer<float> upBuf (chans, 2, (int) up.getNumSamples());
+
+        scaledMidi.clear();
+        for (const auto m : midi)
+            scaledMidi.addEvent (m.getMessage(), m.samplePosition * factor);
+        synth.render (upBuf, scaledMidi, snap, blockInfo);
+        os.processSamplesDown (block);
+    }
 
     // защитный мягкий лимитер: прозрачен до -2 dBFS, выше — плавно ограничивает до 0 dBFS
-    for (int c = 0; c < buffer.getNumChannels(); ++c)
+    float peak = 0.0f;
+    for (int c = 0; c < juce::jmin (2, buffer.getNumChannels()); ++c)
     {
         float* d = buffer.getWritePointer (c);
-        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        for (int i = 0; i < numSamples; ++i)
         {
             const float x = d[i], ax = std::abs (x);
             if (ax > 0.8f)
                 d[i] = std::copysign (0.8f + 0.2f * std::tanh ((ax - 0.8f) * 5.0f), x);
+            peak = juce::jmax (peak, std::abs (d[i]));
         }
     }
 
-    // осциллограф
+    // данные для визуализации (стерео)
     {
-        const int n = buffer.getNumSamples();
         const float* l = buffer.getReadPointer (0);
         const float* r = buffer.getNumChannels() > 1 ? buffer.getReadPointer (1) : l;
-        const auto scope = scopeFifo.write (juce::jmin (n, scopeFifo.getFreeSpace()));
+        const auto w = scopeFifo.write (juce::jmin (numSamples, scopeFifo.getFreeSpace()));
         int k = 0;
-        for (int i = 0; i < scope.blockSize1; ++i, ++k) scopeBuffer[(size_t) (scope.startIndex1 + i)] = 0.5f * (l[k] + r[k]);
-        for (int i = 0; i < scope.blockSize2; ++i, ++k) scopeBuffer[(size_t) (scope.startIndex2 + i)] = 0.5f * (l[k] + r[k]);
+        for (int i = 0; i < w.blockSize1; ++i, ++k) { scopeL[(size_t) (w.startIndex1 + i)] = l[k]; scopeR[(size_t) (w.startIndex1 + i)] = r[k]; }
+        for (int i = 0; i < w.blockSize2; ++i, ++k) { scopeL[(size_t) (w.startIndex2 + i)] = l[k]; scopeR[(size_t) (w.startIndex2 + i)] = r[k]; }
     }
     lfoDisplay[0].store (synth.getLfoValue (0));
     lfoDisplay[1].store (synth.getLfoValue (1));
     activeVoices.store (synth.getActiveVoiceCount());
+    lowestNote.store (synth.getLowestHeldNote());
+    outPeak.store (juce::jmax (peak, outPeak.load() * 0.92f));
+
+    const double elapsed = juce::Time::highResolutionTicksToSeconds (juce::Time::getHighResolutionTicks() - t0);
+    const double load = elapsed / juce::jmax (1.0e-6, numSamples / hostSampleRate);
+    cpuLoad.store ((float) (cpuLoad.load() * 0.9 + load * 0.1));
     // hold уничтожается здесь; если это последняя ссылка — её держит garbage (см. setSample), освобождения в аудиопотоке нет
 }
 
 // ---------------------------------------------------------------------------
-std::shared_ptr<const SampleAsset> FerriteProcessor::getSample (int op) const
+std::shared_ptr<const SampleAsset> LoomProcessor::getSample (int op) const
 {
     return std::atomic_load (&samples[(size_t) op]);
 }
 
-void FerriteProcessor::setSample (int op, std::shared_ptr<const SampleAsset> asset)
+void LoomProcessor::setSample (int op, std::shared_ptr<const SampleAsset> asset)
 {
     auto old = std::atomic_exchange (&samples[(size_t) op], std::move (asset));
     {
@@ -249,7 +306,7 @@ void FerriteProcessor::setSample (int op, std::shared_ptr<const SampleAsset> ass
     collectGarbage();
 }
 
-void FerriteProcessor::collectGarbage()
+void LoomProcessor::collectGarbage()
 {
     std::lock_guard<std::mutex> lock (garbageMutex);
     // освобождаем только то, что никто, кроме нас, не держит (аудиопоток отпускает ссылку в конце блока)
@@ -258,13 +315,13 @@ void FerriteProcessor::collectGarbage()
                    garbage.end());
 }
 
-juce::String FerriteProcessor::getLastError() const
+juce::String LoomProcessor::getLastError() const
 {
     std::lock_guard<std::mutex> lock (errorMutex);
     return lastError;
 }
 
-void FerriteProcessor::loadSampleAsync (int op, const juce::File& file)
+void LoomProcessor::loadSampleAsync (int op, const juce::File& file)
 {
     auto aliveFlag = alive;
     loaderPool.addJob ([this, op, file, aliveFlag]
@@ -298,17 +355,17 @@ void FerriteProcessor::loadSampleAsync (int op, const juce::File& file)
     });
 }
 
-void FerriteProcessor::clearSample (int op)
+void LoomProcessor::clearSample (int op)
 {
     setSample (op, nullptr);
 }
 
 // ---------------------------------------------------------------------------
-std::unique_ptr<juce::XmlElement> FerriteProcessor::createStateXml (bool includeSamples)
+std::unique_ptr<juce::XmlElement> LoomProcessor::createStateXml (bool includeSamples)
 {
     auto state = apvts.copyState();
     auto xml = state.createXml();
-    xml->setAttribute ("ferriteVersion", 1);
+    xml->setAttribute ("loomVersion", 1);
 
     auto* samplesXml = xml->createNewChildElement ("SAMPLES");
     if (includeSamples)
@@ -323,7 +380,7 @@ std::unique_ptr<juce::XmlElement> FerriteProcessor::createStateXml (bool include
     return xml;
 }
 
-void FerriteProcessor::restoreStateXml (const juce::XmlElement& xml)
+void LoomProcessor::restoreStateXml (const juce::XmlElement& xml)
 {
     if (! xml.hasTagName (apvts.state.getType())) return;
 
@@ -349,7 +406,7 @@ void FerriteProcessor::restoreStateXml (const juce::XmlElement& xml)
         setSample (i, loaded[(size_t) i]);
 }
 
-void FerriteProcessor::resetToDefaults()
+void LoomProcessor::resetToDefaults()
 {
     for (auto* p : getParameters())
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
@@ -358,14 +415,14 @@ void FerriteProcessor::resetToDefaults()
         setSample (i, nullptr);
 }
 
-void FerriteProcessor::getStateInformation (juce::MemoryBlock& destData)
+void LoomProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto xml = createStateXml (true);
     xml->setAttribute ("presetName", presets.getCurrentName());
     copyXmlToBinary (*xml, destData);
 }
 
-void FerriteProcessor::setStateInformation (const void* data, int sizeInBytes)
+void LoomProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
     {
@@ -374,13 +431,13 @@ void FerriteProcessor::setStateInformation (const void* data, int sizeInBytes)
     }
 }
 
-juce::AudioProcessorEditor* FerriteProcessor::createEditor()
+juce::AudioProcessorEditor* LoomProcessor::createEditor()
 {
-    return new FerriteEditor (*this);
+    return new LoomEditor (*this);
 }
-} // namespace ferrite
+} // namespace loom
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new ferrite::FerriteProcessor();
+    return new loom::LoomProcessor();
 }

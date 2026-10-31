@@ -3,7 +3,7 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <memory>
 
-namespace ferrite
+namespace loom
 {
 // Загруженный семпл оператора: моно-аудио, найденный питч, wavetable из него,
 // и сжатая (FLAC) копия для сохранения внутри пресета/проекта.
@@ -38,6 +38,17 @@ struct SampleAsset
         return ((c3 * t + c2) * t + c1) * t + x0;
     }
 
+    inline float readLinear (double pos) const noexcept
+    {
+        const int i = (int) std::floor (pos);
+        if (i < -1 || i > length + 1) return 0.0f;
+        const float t = (float) (pos - i);
+        const float* p = audio.data() + kPadFront + i;
+        return p[0] + t * (p[1] - p[0]);
+    }
+
+    inline float read (double pos, bool hermite) const noexcept { return hermite ? readCubic (pos) : readLinear (pos); }
+
     static std::shared_ptr<SampleAsset> loadFromFile (const juce::File& file, juce::String& error);
     static std::shared_ptr<SampleAsset> loadFromEncoded (const juce::MemoryBlock& flac, const juce::String& name, juce::String& error);
 
@@ -48,4 +59,4 @@ private:
 };
 
 float detectPitchMidi (const float* x, int n, double sampleRate);   // -1 если не найден
-} // namespace ferrite
+} // namespace loom

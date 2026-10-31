@@ -1,6 +1,6 @@
 #include "Wavetable.h"
 
-namespace ferrite
+namespace loom
 {
 void Wavetable::buildFromSpectra (const std::vector<std::vector<std::complex<float>>>& spectra, bool normalisePerFrame)
 {
@@ -129,4 +129,4 @@ const Wavetable& Wavetable::getBasic()
     }();
     return table;
 }
-} // namespace ferrite
+} // namespace loom

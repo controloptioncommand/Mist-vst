@@ -4,12 +4,12 @@
 #include "PluginEditor.h"
 #include "FactoryPresets.h"
 
-using namespace ferrite;
+using namespace loom;
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (! (cond)) { ++failures; std::cout << "  FAIL: " << msg << "\n"; } } while (0)
 
-static void setParam (FerriteProcessor& p, const juce::String& id, float v)
+static void setParam (LoomProcessor& p, const juce::String& id, float v)
 {
     auto* pp = p.apvts.getParameter (id);
     if (pp == nullptr) { std::cout << "  unknown param " << id << "\n"; ++failures; return; }
@@ -18,7 +18,7 @@ static void setParam (FerriteProcessor& p, const juce::String& id, float v)
 
 struct Stats { float peak = 0; double rms = 0; bool finite = true; double realtimeFactor = 0; };
 
-static Stats render (FerriteProcessor& p, const std::vector<int>& notes, double holdSec, double tailSec,
+static Stats render (LoomProcessor& p, const std::vector<int>& notes, double holdSec, double tailSec,
                      const juce::File& out, double sr = 48000.0, int block = 512)
 {
     p.prepareToPlay (sr, block);
@@ -109,7 +109,7 @@ int main (int argc, char** argv)
     const juce::File outDir = argc > 1 ? juce::File (juce::String (argv[1])) : juce::File::getCurrentWorkingDirectory().getChildFile ("render");
     outDir.createDirectory();
 
-    auto proc = std::make_unique<FerriteProcessor>();
+    auto proc = std::make_unique<LoomProcessor>();
     auto& p = *proc;
 
     std::cout << "== Factory presets\n";
@@ -176,22 +176,47 @@ int main (int argc, char** argv)
         setParam (p, opId (0, "reverse"), 1.0f);
         setParam (p, opId (0, "loopMode"), (float) LoopPingPong);
         report ("sample reverse pingpong", render (p, { 50 }, 3.0, 1.0, outDir.getChildFile ("sample_pingpong.wav")));
+        setParam (p, opId (0, "reverse"), 0.0f);
+
+        // Grain
+        setParam (p, opId (0, "mode"), (float) OpModeGrain);
+        setParam (p, opId (0, "scan"), 0.3f);
+        setParam (p, opId (0, "grainSize"), 0.08f);
+        setParam (p, opId (0, "grainDensity"), 4.0f);
+        setParam (p, opId (0, "grainSpray"), 0.3f);
+        auto gs = render (p, { 57, 64 }, 3.0, 1.0, outDir.getChildFile ("sample_grain.wav"));
+        report ("grain", gs);
+        CHECK (gs.rms > 1e-3, "grain mode silent");
+
+        // интерполяция и оверсемплинг
+        setParam (p, "interp", (float) InterpLinear);
+        report ("grain linear interp", render (p, { 57 }, 1.0, 0.5, {}));
+        setParam (p, "interp", (float) InterpHermite);
+        for (int os = 0; os < 3; ++os)
+        {
+            setParam (p, "oversampling", (float) os);
+            auto st = render (p, { 45, 57, 64 }, 1.5, 0.5, outDir.getChildFile ("os_" + juce::String (1 << os) + "x.wav"));
+            report ("oversampling " + juce::String (1 << os) + "x", st);
+            CHECK (st.rms > 1e-3, "oversampling " + juce::String (1 << os) + "x silent");
+            CHECK (p.getLatencySamples() >= 0, "latency");
+        }
+        setParam (p, "oversampling", 1.0f);
 
         // сохранение/восстановление состояния с семплом
         juce::MemoryBlock state;
         p.getStateInformation (state);
         std::cout << "  state size " << (int) state.getSize() << " bytes\n";
-        auto p2 = std::make_unique<FerriteProcessor>();
+        auto p2 = std::make_unique<LoomProcessor>();
         p2->setStateInformation (state.getData(), (int) state.getSize());
         auto a2 = p2->getSample (0);
         CHECK (a2 != nullptr && a2->length == asset->length, "sample not restored from state");
         auto* m2 = p2->apvts.getParameter (opId (0, "mode"));
-        CHECK ((int) m2->convertFrom0to1 (m2->getValue()) == OpModeSample, "params not restored");
+        CHECK ((int) m2->convertFrom0to1 (m2->getValue()) == OpModeGrain, "params not restored");
 
         // пресет-файл
         CHECK (p.presets.save ("RenderTest Preset", "Tests"), "preset save failed");
         p.presets.initPatch();
-        auto f = PresetManager::getPresetFolder().getChildFile ("Tests").getChildFile ("RenderTest Preset.ferrite");
+        auto f = PresetManager::getPresetFolder().getChildFile ("Tests").getChildFile ("RenderTest Preset.loom");
         CHECK (p.presets.loadFile (f), "preset load failed");
         CHECK (p.getSample (0) != nullptr, "preset did not restore sample");
         f.getParentDirectory().deleteRecursively();
@@ -204,15 +229,39 @@ int main (int argc, char** argv)
         p.presets.load (2);
         if (asset) p.loadSampleAsync (2, sampleFile);
         juce::MessageManager::getInstance()->runDispatchLoopUntil (500);
+        setParam (p, "drone", 1.0f);
+        setParam (p, opId (2, "mode"), (float) OpModeSample);
         std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
-        ed->setSize (FerriteEditor::kBaseW, FerriteEditor::kBaseH);
-        juce::MessageManager::getInstance()->runDispatchLoopUntil (200);
-        auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
-        auto pngFile = outDir.getChildFile ("ui.png");
-        pngFile.deleteFile();
-        juce::FileOutputStream fos (pngFile);
-        juce::PNGImageFormat().writeImageToStream (img, fos);
-        std::cout << "  wrote " << pngFile.getFullPathName() << "\n";
+        auto* le = dynamic_cast<LoomEditor*> (ed.get());
+        ed->setSize (LoomEditor::kBaseW, LoomEditor::kBaseH);
+        p.prepareToPlay (48000.0, 512);
+
+        struct Shot { const char* name; int page, viz, op; };
+        const Shot shots[] = { { "ui_waves", 0, 0, 2 }, { "ui_spectrum", 2, 1, 0 }, { "ui_scope", 6, 2, 1 }, { "ui_envelope", 1, 0, 3 } };
+        bool first = true;
+        for (auto& sh : shots)
+        {
+            le->setView (sh.page, sh.viz, sh.op);
+            // гоним звук, чтобы визуализация ожила
+            juce::AudioBuffer<float> buf (2, 512);
+            for (int blk = 0; blk < 90; ++blk)
+            {
+                juce::MidiBuffer midi;
+                if (first && blk == 0) for (int nn : { 45, 52, 57, 64 }) midi.addEvent (juce::MidiMessage::noteOn (1, nn, (juce::uint8) 100), 0);
+                if (first && blk == 1) for (int nn : { 45, 52, 57, 64 }) midi.addEvent (juce::MidiMessage::noteOff (1, nn), 0);   // Drone держит
+                p.processBlock (buf, midi);
+                juce::MessageManager::getInstance()->runDispatchLoopUntil (11);
+            }
+            first = false;
+            auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+            auto pngFile = outDir.getChildFile (juce::String (sh.name) + ".png");
+            pngFile.deleteFile();
+            juce::FileOutputStream fos (pngFile);
+            juce::PNGImageFormat().writeImageToStream (img, fos);
+            std::cout << "  wrote " << pngFile.getFullPathName() << "\n";
+        }
+        CHECK (p.activeVoices.load() > 0, "drone did not hold notes");
+        setParam (p, "drone", 0.0f);
         ed.reset();
     }
 

@@ -1,7 +1,7 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 
-namespace ferrite
+namespace loom
 {
 constexpr int kNumOps        = 6;
 constexpr int kNumVoices     = 8;
@@ -15,7 +15,8 @@ inline juce::String matId (int src, int dst)          { return "mat_" + juce::St
 inline juce::String modId (int slot, const char* name){ return "mod" + juce::String (slot + 1) + "_" + name; }
 inline juce::String lfoId (int lfo, const char* name) { return "lfo" + juce::String (lfo + 1) + "_" + name; }
 
-enum OpMode { OpModeWave = 0, OpModeSample = 1 };
+enum OpMode { OpModeWave = 0, OpModeSample = 1, OpModeGrain = 2 };   // Wave = «Scrub» в интерфейсе
+enum Interp { InterpLinear = 0, InterpHermite = 1 };
 enum LoopMode { LoopOff = 0, LoopForward = 1, LoopPingPong = 2 };
 enum PolyMode { PolyPoly = 0, PolyMono = 1, PolyLegato = 2 };
 enum FilterType { FiltLP12 = 0, FiltLP24, FiltBP, FiltHP, FiltNotch };
@@ -47,4 +48,4 @@ juce::StringArray algorithmChoiceNames();   // "Matrix", "1 Stack", ...
 float coarseToRatio (int coarse);           // 0 -> 0.5, 1..32 -> n
 
 juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-} // namespace ferrite
+} // namespace loom

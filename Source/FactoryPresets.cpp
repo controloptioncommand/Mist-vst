@@ -1,7 +1,7 @@
 #include "FactoryPresets.h"
 #include "Params.h"
 
-namespace ferrite
+namespace loom
 {
 namespace
 {
@@ -131,4 +131,4 @@ const std::vector<FactoryPreset>& getFactoryPresets()
     };
     return presets;
 }
-} // namespace ferrite
+} // namespace loom

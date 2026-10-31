@@ -1,15 +1,15 @@
 #include "RoutingPanel.h"
 #include "../Algorithms.h"
 
-namespace ferrite
+namespace loom
 {
-static float paramValue (FerriteProcessor& p, const juce::String& id)
+static float paramValue (LoomProcessor& p, const juce::String& id)
 {
     auto* pp = p.apvts.getParameter (id);
     return pp != nullptr ? pp->convertFrom0to1 (pp->getValue()) : 0.0f;
 }
 
-Routing Routing::read (FerriteProcessor& p)
+Routing Routing::read (LoomProcessor& p)
 {
     Routing r;
     r.algorithm = (int) paramValue (p, "algorithm");
@@ -45,7 +45,7 @@ Routing Routing::read (FerriteProcessor& p)
 void AlgorithmDiagram::paint (juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    g.setColour (Colours::bg);
+    g.setColour (Colours::panelHi);
     g.fillRoundedRectangle (bounds, 4.0f);
 
     const auto r = Routing::read (proc);
@@ -150,13 +150,13 @@ void AlgorithmDiagram::paint (juce::Graphics& g)
         g.fillEllipse (p.x - nodeR, p.y - nodeR, nodeR * 2, nodeR * 2);
         g.setColour (c);
         g.drawEllipse (p.x - nodeR, p.y - nodeR, nodeR * 2, nodeR * 2, 1.5f);
-        g.setColour (r.out[i] > 0 ? Colours::bg : Colours::text);
-        g.setFont (FerriteLookAndFeel::font (nodeR, true));
+        g.setColour (r.out[i] > 0 ? juce::Colours::white : Colours::text);
+        g.setFont (LoomLookAndFeel::font (nodeR, true));
         g.drawText (juce::String (i + 1), juce::Rectangle<float> (p.x - nodeR, p.y - nodeR, nodeR * 2, nodeR * 2), juce::Justification::centred);
     }
 
     g.setColour (Colours::textDim);
-    g.setFont (FerriteLookAndFeel::font (11.0f));
+    g.setFont (LoomLookAndFeel::font (11.0f));
     const juce::String name = r.isMatrix ? juce::String ("MATRIX") : "ALG " + juce::String (r.algorithm) + "  " + getAlgorithm (r.algorithm - 1).name;
     g.drawText (name, bounds.reduced (6, 3), juce::Justification::topLeft);
 }
@@ -188,7 +188,7 @@ juce::RangedAudioParameter* MatrixGrid::paramFor (int row, int col) const
 void MatrixGrid::paint (juce::Graphics& g)
 {
     const auto r = Routing::read (proc);
-    g.setFont (FerriteLookAndFeel::font (10.0f));
+    g.setFont (LoomLookAndFeel::font (10.0f));
 
     for (int c = 0; c <= kNumOps; ++c)
     {
@@ -230,7 +230,7 @@ void MatrixGrid::paint (juce::Graphics& g)
 
     if (! r.isMatrix)
     {
-        g.setColour (Colours::bg.withAlpha (0.35f));
+        g.setColour (Colours::panel.withAlpha (0.55f));
         for (int row = 0; row < kNumOps; ++row)
             for (int c = 0; c <= kNumOps; ++c)
                 if (c != row) g.fillRect (cellRect (row, c).reduced (1.5f));
@@ -289,7 +289,7 @@ void MatrixGrid::mouseDoubleClick (const juce::MouseEvent& e)
 }
 
 // ===========================================================================
-RoutingPanel::RoutingPanel (FerriteProcessor& p) : Section ("Routing"), diagram (p), proc (p), grid (p)
+RoutingPanel::RoutingPanel (LoomProcessor& p) : Section ("Routing"), diagram (p), proc (p), grid (p)
 {
     algo.attach (proc.apvts, "algorithm");
     addAndMakeVisible (algo);
@@ -300,7 +300,7 @@ RoutingPanel::RoutingPanel (FerriteProcessor& p) : Section ("Routing"), diagram 
     addAndMakeVisible (grid);
 
     hint.setText ("drag cells: amount  |  dbl-click: on/off  |  shift: fine", juce::dontSendNotification);
-    hint.setFont (FerriteLookAndFeel::font (10.0f));
+    hint.setFont (LoomLookAndFeel::font (10.0f));
     hint.setColour (juce::Label::textColourId, Colours::textDim);
     addAndMakeVisible (hint);
 
@@ -367,4 +367,4 @@ void RoutingPanel::resized()
     r.removeFromLeft (8);
     grid.setBounds (r);
 }
-} // namespace ferrite
+} // namespace loom

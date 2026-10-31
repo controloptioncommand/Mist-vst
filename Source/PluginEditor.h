@@ -2,67 +2,115 @@
 #include "PluginProcessor.h"
 #include "UI/LookAndFeel.h"
 #include "UI/Widgets.h"
+#include "UI/Visualizer.h"
 #include "UI/OperatorPanel.h"
 #include "UI/RoutingPanel.h"
 #include "UI/ModulationPanel.h"
 
-namespace ferrite
+namespace loom
 {
-// Верхняя панель: пресеты, глобальные параметры, осциллограф
-class HeaderBar : public juce::Component
+// Сегментированный переключатель (pill). Может быть привязан к choice-параметру.
+class Segmented : public juce::Component
 {
 public:
-    explicit HeaderBar (FerriteProcessor& p);
+    struct Item { juce::String text; int value; };
+    void setItems (std::vector<Item> it) { items = std::move (it); repaint(); }
+    void setSelectedValue (int v) { if (v != selected) { selected = v; repaint(); } }
+    int getSelectedValue() const { return selected; }
+    std::function<void (int)> onChange;
     void paint (juce::Graphics& g) override;
-    void resized() override;
-    void refreshPresetList();
-    void tick();
-
-    ScopeView scope;
+    void mouseDown (const juce::MouseEvent& e) override;
 
 private:
-    void showPresetMenu();
-    void savePreset();
-    FerriteProcessor& proc;
-    juce::TextButton presetButton, prev { "<" }, next { ">" }, save { "Save" }, init { "Init" };
-    ParamChoice polyMode { "Voice" };
-    ParamKnob glide { "Glide" }, bend { "Bend" }, uni { "Unison" }, uniDetune { "Detune" }, uniSpread { "Spread" },
-              fm { "FM Amt" }, master { "Master" };
-    juce::Label voicesLabel;
-    std::unique_ptr<juce::AlertWindow> saveWindow;
+    std::vector<Item> items;
+    int selected = 0;
 };
 
-class FerriteEditor : public juce::AudioProcessorEditor, private juce::Timer
+// Pill с подписью и значением, по клику — меню выбора (Interpolation Hermite ⌄)
+class PillChoice : public juce::Component
 {
 public:
-    explicit FerriteEditor (FerriteProcessor&);
-    ~FerriteEditor() override;
+    PillChoice (APVTS& s, const juce::String& paramId, const juce::String& caption);
+    void paint (juce::Graphics& g) override;
+    void mouseDown (const juce::MouseEvent&) override;
+
+private:
+    juce::RangedAudioParameter* param;
+    juce::String caption;
+    std::unique_ptr<juce::ParameterAttachment> attachment;
+    int index = 0;
+};
+
+class OutMeter : public juce::Component
+{
+public:
+    void setLevel (float peak) { level = peak; repaint(); }
+    void paint (juce::Graphics& g) override;
+
+private:
+    float level = 0.0f;
+};
+
+class LoomEditor : public juce::AudioProcessorEditor, private juce::Timer
+{
+public:
+    explicit LoomEditor (LoomProcessor&);
+    ~LoomEditor() override;
 
     void paint (juce::Graphics&) override;
+    void paintOverChildren (juce::Graphics&) override;
     void resized() override;
 
-    static constexpr int kBaseW = 1280, kBaseH = 820;
+    static constexpr int kBaseW = 1120, kBaseH = 860;
+    void setView (int pageIndex, int vizMode, int op) { selectOperator (op); showPage (pageIndex); viz.setMode ((Visualizer::Mode) vizMode); }
 
 private:
     void timerCallback() override;
     void selectOperator (int op);
+    void showPage (int page);
+    void showPresetMenu();
+    void showSettingsMenu();
+    void savePreset();
+    void setParam (const juce::String& id, float realValue);
+    void updatePageTitle();
 
-    FerriteProcessor& proc;
-    FerriteLookAndFeel lnf;
+    LoomProcessor& proc;
+    LoomLookAndFeel lnf;
+    juce::Component content;   // рисуется в базовом размере, масштабируется трансформом
 
-    // всё рисуется в базовом размере и масштабируется трансформом
-    juce::Component content;
-    HeaderBar header;
-    std::vector<std::unique_ptr<OpCard>> cards;
+    // шапка
+    juce::TextButton prevPreset { "<" }, nextPreset { ">" }, presetName, settingsButton;
+    Segmented modeSwitch;
+    OutMeter outMeter;
+    juce::Rectangle<int> headerArea;
+
+    Visualizer viz;
+    std::vector<std::unique_ptr<SampleSlot>> slots;
+    int selectedOp = 0;
+
+    // настройки
+    Segmented tabs;
+    int page = 0;
+    juce::Rectangle<int> settingsArea, titleArea, bottomArea;
+    juce::String pageTitle, pageDescription;
+    OperatorPage opPage;
+    EnvelopePage envPage;
     RoutingPanel routing;
-    OperatorDetail detail;
-    FilterPanel filter;
+    VoicePage voicePage;
+    FilterPanel filterPage;
     LfoPanel lfo1, lfo2;
-    ModMatrixPanel modMatrix;
+    juce::Component lfoPage;
+    ModMatrixPanel modPage;
+    std::vector<juce::Component*> pages;
 
-    int lastSampleVersion = -1;
-    std::vector<float> scopeTmp = std::vector<float> (8192);
+    // нижняя панель
+    ParamToggle drone { "Drone" };
+    PillChoice interp, oversampling;
+    juce::Label cpuLabel;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FerriteEditor)
+    std::unique_ptr<juce::AlertWindow> saveWindow;
+    std::vector<float> tmpL = std::vector<float> (LoomProcessor::kScopeSize), tmpR = std::vector<float> (LoomProcessor::kScopeSize);
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LoomEditor)
 };
-} // namespace ferrite
+} // namespace loom

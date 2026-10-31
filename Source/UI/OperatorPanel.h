@@ -2,15 +2,50 @@
 #include "Widgets.h"
 #include "../PluginProcessor.h"
 
-namespace ferrite
+namespace loom
 {
-// Вид волны: семпл (с маркерами start/loop, их можно тянуть) или текущий кадр wavetable
+juce::String operatorRole (LoomProcessor& p, int op);   // "Carrier" / "Modulator" / "Unused" / "Off"
+juce::String modeName (int mode);                       // "Scrub" / "Sample PM" / "Grain"
+juce::String modeDescription (int mode);
+
+// Слот семпла в левой колонке: имя, волна, start/length, reverse; drag & drop
+class SampleSlot : public juce::Component, public juce::FileDragAndDropTarget
+{
+public:
+    SampleSlot (LoomProcessor& p, int op, std::function<void (int)> onSelect);
+    void paint (juce::Graphics& g) override;
+    void resized() override;
+    void mouseDown (const juce::MouseEvent& e) override;
+    void mouseDoubleClick (const juce::MouseEvent& e) override;
+    void setSelected (bool s) { if (s != selected) { selected = s; repaint(); } }
+    void refresh();
+
+    bool isInterestedInFileDrag (const juce::StringArray& files) override;
+    void fileDragEnter (const juce::StringArray&, int, int) override { dragOver = true; repaint(); }
+    void fileDragExit (const juce::StringArray&) override { dragOver = false; repaint(); }
+    void filesDropped (const juce::StringArray& files, int, int) override;
+
+    void openFileChooser();
+
+private:
+    float param (const char* name) const;
+    LoomProcessor& proc;
+    int op;
+    std::function<void (int)> onSelect;
+    bool selected = false, dragOver = false;
+    juce::TextButton reverse { "Reverse" };
+    std::unique_ptr<APVTS::ButtonAttachment> reverseAttachment;
+    std::unique_ptr<juce::FileChooser> chooser;
+    juce::Rectangle<int> waveArea, powerArea;
+    juce::String cachedRole;
+};
+
+// Большой вид волны выбранного оператора с маркерами start/loop
 class WaveView : public juce::Component
 {
 public:
-    WaveView (FerriteProcessor& p) : proc (p) {}
+    explicit WaveView (LoomProcessor& p) : proc (p) {}
     void setOperator (int op) { opIndex = op; repaint(); }
-    void setCompact (bool c) { compact = c; }
     void paint (juce::Graphics& g) override;
     void mouseDown (const juce::MouseEvent& e) override;
     void mouseDrag (const juce::MouseEvent& e) override;
@@ -19,72 +54,50 @@ public:
 private:
     float param (const char* name) const;
     juce::RangedAudioParameter* paramPtr (const char* name) const;
-    FerriteProcessor& proc;
+    LoomProcessor& proc;
     int opIndex = 0;
-    bool compact = false;
     juce::RangedAudioParameter* dragging = nullptr;
 };
 
-// Карточка оператора в верхнем ряду: выбор, on/off, уровень, перетаскивание семпла
-class OpCard : public juce::Component, public juce::FileDragAndDropTarget
+// Страница «Operator»: параметры выбранного оператора; набор второй строки зависит от режима
+class OperatorPage : public juce::Component
 {
 public:
-    OpCard (FerriteProcessor& p, int op, std::function<void (int)> onSelect);
-    void paint (juce::Graphics& g) override;
-    void paintOverChildren (juce::Graphics& g) override;
+    explicit OperatorPage (LoomProcessor& p);
+    void setOperator (int op);
     void resized() override;
-    void mouseDown (const juce::MouseEvent& e) override;
-    void setSelected (bool s) { selected = s; repaint(); }
     void refresh();
 
-    bool isInterestedInFileDrag (const juce::StringArray& files) override;
-    void fileDragEnter (const juce::StringArray&, int, int) override { dragOver = true; repaint(); }
-    void fileDragExit (const juce::StringArray&) override { dragOver = false; repaint(); }
-    void filesDropped (const juce::StringArray& files, int, int) override;
-
 private:
-    FerriteProcessor& proc;
-    int op;
-    std::function<void (int)> onSelect;
-    bool selected = false, dragOver = false;
-    ParamToggle onButton { "" };
-    ParamKnob level;
-    juce::Label ratioLabel, nameLabel;
+    LoomProcessor& proc;
+    int op = 0, shownMode = -1;
+    juce::Colour col;
+
+    ParamKnob level { "Depth" }, coarse { "Ratio" }, fine { "Fine" }, detune { "Detune" }, feedback { "Feedback" },
+              velSens { "Velocity" }, pan { "Pan" };
+    ParamKnob scan { "Position" }, start { "Start" }, loopStart { "Loop In" }, loopEnd { "Loop Out" }, xfade { "X-Fade" },
+              root { "Root" }, grainSize { "Size" }, grainDensity { "Density" }, grainSpray { "Spray" },
+              fixedHz { "Fixed Hz" }, out { "Matrix Out" };
+    ParamToggle on { "On" }, fixed { "Fixed freq" }, keytrack { "Keytrack" };
+    ParamChoice loopMode { "Loop" };
     WaveView wave;
+
+    std::vector<ParamKnob*> allKnobs();
+    std::vector<juce::Component*> secondRow();
 };
 
-// Подробная панель выбранного оператора
-class OperatorDetail : public Section, public juce::FileDragAndDropTarget
+class EnvelopePage : public juce::Component
 {
 public:
-    explicit OperatorDetail (FerriteProcessor& p);
+    explicit EnvelopePage (LoomProcessor& p);
     void setOperator (int op);
-    int getOperator() const { return op; }
     void resized() override;
-    void refresh();   // вызывается таймером
-
-    bool isInterestedInFileDrag (const juce::StringArray& files) override;
-    void filesDropped (const juce::StringArray& files, int, int) override;
+    void refresh();
 
 private:
-    FerriteProcessor& proc;
+    LoomProcessor& proc;
     int op = 0;
-
-    ParamChoice mode { "Mode" };
-    ParamKnob coarse { "Ratio" }, fine { "Fine" }, detune { "Detune" }, fixedHz { "Fixed Hz" };
-    ParamToggle fixed { "Fixed" };
-    ParamKnob level { "Level" }, velSens { "Velocity" }, feedback { "Feedback" }, scan { "Scan" }, pan { "Pan" }, out { "Mtx Out" };
     ParamKnob delay { "Delay" }, attack { "Attack" }, hold { "Hold" }, decay { "Decay" }, sustain { "Sustain" }, release { "Release" };
-    EnvelopeView envView;
-
-    WaveView wave;
-    ParamKnob start { "Start" }, loopStart { "Loop In" }, loopEnd { "Loop Out" }, xfade { "X-Fade" }, root { "Root" };
-    ParamChoice loopMode { "Loop" };
-    ParamToggle reverse { "Reverse" }, keytrack { "Keytrack" };
-    juce::TextButton loadButton { "Load..." }, clearButton { "Clear" };
-    juce::Label sampleInfo;
-    std::unique_ptr<juce::FileChooser> chooser;
-
-    std::vector<ParamKnob*> knobs();
+    EnvelopeView view;
 };
-} // namespace ferrite
+} // namespace loom

@@ -2,13 +2,13 @@
 #include "PluginProcessor.h"
 #include "FactoryPresets.h"
 
-namespace ferrite
+namespace loom
 {
-PresetManager::PresetManager (FerriteProcessor& p) : proc (p) {}
+PresetManager::PresetManager (LoomProcessor& p) : proc (p) {}
 
 juce::File PresetManager::getPresetFolder()
 {
-    return juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("Ferrite").getChildFile ("Presets");
+    return juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("Loom").getChildFile ("Presets");
 }
 
 void PresetManager::refresh()
@@ -111,4 +111,4 @@ void PresetManager::initPatch()
     currentName = "Init";
     currentIndex = -1;
 }
-} // namespace ferrite
+} // namespace loom

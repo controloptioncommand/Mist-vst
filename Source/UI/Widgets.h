@@ -2,22 +2,24 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "LookAndFeel.h"
 
-namespace ferrite
+namespace loom
 {
 using APVTS = juce::AudioProcessorValueTreeState;
 
-// Ручка с подписью и значением, привязанная к параметру
+// Ручка: сверху круг, под ним жирное имя и значение — как в макете
 class ParamKnob : public juce::Component
 {
 public:
-    ParamKnob (const juce::String& label, juce::Colour accent = Colours::accent);
+    explicit ParamKnob (const juce::String& label, juce::Colour accent = Colours::accent);
     void attach (APVTS& state, const juce::String& paramId);
     void detach();
+    void setLabelText (const juce::String& n) { label.setText (n, juce::dontSendNotification); }
     void resized() override;
     juce::Slider slider;
-    juce::Label label;
+    juce::Label label, value;
 
 private:
+    void updateValue();
     std::unique_ptr<APVTS::SliderAttachment> attachment;
 };
 
@@ -50,26 +52,33 @@ private:
     std::unique_ptr<APVTS::ComboBoxAttachment> attachment;
 };
 
-// Панель с заголовком
+// Карточка с заголовком. flat = без фона и заголовка (когда вложена в страницу)
 class Section : public juce::Component
 {
 public:
     explicit Section (const juce::String& title, juce::Colour accent = Colours::accent) : title (title), accent (accent) {}
     void paint (juce::Graphics& g) override;
-    juce::Rectangle<int> getContentBounds() const { return getLocalBounds().reduced (8).withTrimmedTop (18); }
+    juce::Rectangle<int> getContentBounds() const
+    {
+        return flat ? getLocalBounds() : getLocalBounds().reduced (12).withTrimmedTop (20);
+    }
     void setTitle (const juce::String& t) { title = t; repaint(); }
     void setAccent (juce::Colour c) { accent = c; repaint(); }
+    void setFlat (bool f) { flat = f; repaint(); resized(); }
 
 private:
     juce::String title;
     juce::Colour accent;
+    bool flat = false;
 };
 
-// Раскладка ручек в ряд/сетку
 void layoutRow (juce::Rectangle<int> area, std::initializer_list<juce::Component*> items, int gap = 4);
+void layoutRow (juce::Rectangle<int> area, const std::vector<juce::Component*>& items, int gap = 4, int maxWidth = 10000);
 void layoutGrid (juce::Rectangle<int> area, int cols, const std::vector<juce::Component*>& items, int gap = 4);
 
-// Рисует DAHDSR по значениям
+// Белая карточка с тенью — общий фон блоков
+void drawCard (juce::Graphics& g, juce::Rectangle<float> r, float radius = 12.0f, bool shadow = true);
+
 class EnvelopeView : public juce::Component
 {
 public:
@@ -81,15 +90,4 @@ private:
     std::array<float, 6> vals {};
     juce::Colour colour = Colours::accent;
 };
-
-class ScopeView : public juce::Component
-{
-public:
-    void push (const float* data, int n);
-    void paint (juce::Graphics& g) override;
-
-private:
-    std::vector<float> buf = std::vector<float> (1024, 0.0f);
-    int write = 0;
-};
-} // namespace ferrite
+} // namespace loom

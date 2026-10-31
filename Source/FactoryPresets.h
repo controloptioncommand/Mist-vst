@@ -3,7 +3,7 @@
 #include <vector>
 #include <utility>
 
-namespace ferrite
+namespace loom
 {
 struct FactoryPreset
 {
@@ -12,4 +12,4 @@ struct FactoryPreset
 };
 
 const std::vector<FactoryPreset>& getFactoryPresets();
-} // namespace ferrite
+} // namespace loom

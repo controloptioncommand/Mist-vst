@@ -1,8 +1,8 @@
 #include "ModulationPanel.h"
 
-namespace ferrite
+namespace loom
 {
-FilterPanel::FilterPanel (FerriteProcessor& p) : Section ("Filter / Mod Env", Colours::accent2)
+FilterPanel::FilterPanel (LoomProcessor& p) : Section ("Filter / Mod Env")
 {
     auto& s = p.apvts;
     on.attach (s, "filterOn");
@@ -16,7 +16,7 @@ FilterPanel::FilterPanel (FerriteProcessor& p) : Section ("Filter / Mod Env", Co
         k->slider.getProperties().set ("accent", Colours::accent2.toString());
 
     modEnvLabel.setText ("MOD ENV", juce::dontSendNotification);
-    modEnvLabel.setFont (FerriteLookAndFeel::font (10.0f, true));
+    modEnvLabel.setFont (LoomLookAndFeel::font (10.0f, true));
     modEnvLabel.setColour (juce::Label::textColourId, Colours::textDim);
 }
 
@@ -34,7 +34,7 @@ void FilterPanel::resized()
 }
 
 // ===========================================================================
-LfoPanel::LfoPanel (FerriteProcessor& p, int i) : Section ("LFO " + juce::String (i + 1), Colours::accent2), proc (p), index (i)
+LfoPanel::LfoPanel (LoomProcessor& p, int i) : Section ("LFO " + juce::String (i + 1), Colours::accent2), proc (p), index (i)
 {
     auto& s = p.apvts;
     shape.attach (s, lfoId (i, "shape"));
@@ -58,7 +58,7 @@ void LfoPanel::refresh()
 void LfoPanel::paintOverChildren (juce::Graphics& g)
 {
     auto m = meter.toFloat();
-    g.setColour (Colours::bg);
+    g.setColour (Colours::panelHi);
     g.fillRoundedRectangle (m, 3.0f);
     const float c = m.getCentreY();
     const float y = c - shown * m.getHeight() * 0.5f;
@@ -80,7 +80,7 @@ void LfoPanel::resized()
 }
 
 // ===========================================================================
-ModMatrixPanel::ModMatrixPanel (FerriteProcessor& p) : Section ("Mod Matrix", Colours::accent2)
+ModMatrixPanel::ModMatrixPanel (LoomProcessor& p) : Section ("Mod Matrix")
 {
     auto& s = p.apvts;
     for (int i = 0; i < kNumModSlots; ++i)
@@ -89,7 +89,12 @@ ModMatrixPanel::ModMatrixPanel (FerriteProcessor& p) : Section ("Mod Matrix", Co
         row.src.addItemList (modSourceNames(), 1);
         row.dst.addItemList (modDestNames(), 1);
         row.amt.setSliderStyle (juce::Slider::LinearHorizontal);
-        row.amt.setTextBoxStyle (juce::Slider::TextBoxRight, false, 44, 18);
+        row.amt.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+        row.value.setFont (LoomLookAndFeel::font (11.0f));
+        row.value.setColour (juce::Label::textColourId, Colours::textDim);
+        row.value.setJustificationType (juce::Justification::centredRight);
+        auto* rowPtr = &row;
+        row.amt.onValueChange = [rowPtr] { rowPtr->value.setText (rowPtr->amt.getTextFromValue (rowPtr->amt.getValue()), juce::dontSendNotification); };
         row.amt.setDoubleClickReturnValue (true, 0.0);
         row.amt.getProperties().set ("accent", Colours::accent2.toString());
         row.srcA = std::make_unique<APVTS::ComboBoxAttachment> (s, modId (i, "src"), row.src);
@@ -98,6 +103,8 @@ ModMatrixPanel::ModMatrixPanel (FerriteProcessor& p) : Section ("Mod Matrix", Co
         addAndMakeVisible (row.src);
         addAndMakeVisible (row.dst);
         addAndMakeVisible (row.amt);
+        addAndMakeVisible (row.value);
+        row.amt.onValueChange();
     }
 }
 
@@ -113,7 +120,35 @@ void ModMatrixPanel::resized()
         line.removeFromLeft (4);
         row.dst.setBounds (line.removeFromLeft (w * 34 / 100));
         line.removeFromLeft (4);
-        row.amt.setBounds (line);
+        row.value.setBounds (line.removeFromRight (48));
+        row.amt.setBounds (line.reduced (6, 0));
     }
 }
-} // namespace ferrite
+} // namespace loom
+
+namespace loom
+{
+VoicePage::VoicePage (LoomProcessor& p)
+{
+    auto& s = p.apvts;
+    polyMode.attach (s, "polyMode");
+    glide.attach (s, "glide"); bend.attach (s, "bendRange"); uni.attach (s, "uniVoices");
+    uniDetune.attach (s, "uniDetune"); uniSpread.attach (s, "uniSpread");
+    fm.attach (s, "fmAmount"); master.attach (s, "master");
+    for (juce::Component* c : std::initializer_list<juce::Component*> { &polyMode, &glide, &bend, &uni, &uniDetune, &uniSpread, &fm, &master })
+        addAndMakeVisible (c);
+}
+
+void VoicePage::resized()
+{
+    auto r = getLocalBounds();
+    auto row1 = r.removeFromTop (92);
+    polyMode.setBounds (row1.removeFromLeft (130).withSizeKeepingCentre (130, 44));
+    row1.removeFromLeft (12);
+    layoutRow (row1, std::vector<juce::Component*> { &glide, &bend, &fm, &master }, 4, 96);
+    r.removeFromTop (8);
+    auto row2 = r.removeFromTop (92);
+    row2.removeFromLeft (142);
+    layoutRow (row2, std::vector<juce::Component*> { &uni, &uniDetune, &uniSpread }, 4, 96);
+}
+} // namespace loom

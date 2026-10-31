@@ -1,5 +1,6 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
 #include "Params.h"
 #include "DSP/Synth.h"
 #include "DSP/SampleAsset.h"
@@ -7,13 +8,13 @@
 #include <atomic>
 #include <mutex>
 
-namespace ferrite
+namespace loom
 {
-class FerriteProcessor : public juce::AudioProcessor
+class LoomProcessor : public juce::AudioProcessor
 {
 public:
-    FerriteProcessor();
-    ~FerriteProcessor() override;
+    LoomProcessor();
+    ~LoomProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -24,7 +25,7 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    const juce::String getName() const override { return "Ferrite"; }
+    const juce::String getName() const override { return "Loom"; }
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
@@ -54,8 +55,11 @@ public:
     // ---- для UI
     juce::AudioProcessorValueTreeState apvts;
     PresetManager presets;
-    juce::AbstractFifo scopeFifo { 8192 };
-    std::vector<float> scopeBuffer = std::vector<float> (8192, 0.0f);
+    static constexpr int kScopeSize = 16384;
+    juce::AbstractFifo scopeFifo { kScopeSize };
+    std::vector<float> scopeL = std::vector<float> (kScopeSize, 0.0f), scopeR = std::vector<float> (kScopeSize, 0.0f);
+    std::atomic<float> outPeak { 0.0f }, cpuLoad { 0.0f };
+    std::atomic<int> lowestNote { -1 };
     std::atomic<float> lfoDisplay[2] {};
     std::atomic<int> activeVoices { 0 };
 
@@ -82,7 +86,8 @@ private:
     {
         std::atomic<float> *on, *mode, *coarse, *fine, *detune, *fixed, *fixedHz, *level, *velSens, *feedback,
                            *scan, *pan, *out, *delay, *attack, *hold, *decay, *sustain, *release,
-                           *start, *loopStart, *loopEnd, *xfade, *loopMode, *reverse, *root, *keytrack;
+                           *start, *loopStart, *loopEnd, *xfade, *loopMode, *reverse, *root, *keytrack,
+                           *grainSize, *grainDensity, *grainSpray;
     };
     std::array<OpParamPtrs, kNumOps> opP {};
     std::atomic<float>* mat[kNumOps][kNumOps] {};
@@ -92,8 +97,12 @@ private:
     std::atomic<float>* pLfo[2][4] {};
     std::atomic<float>* pSlot[kNumModSlots][3] {};
 
-    double currentSampleRate = 44100.0;
+    double currentSampleRate = 44100.0, hostSampleRate = 44100.0;
+    int maxBlock = 4096, osIndex = -1;
+    std::array<std::unique_ptr<juce::dsp::Oversampling<float>>, 3> oversamplers;
+    juce::MidiBuffer scaledMidi;
+    std::atomic<float> *pDrone = nullptr, *pInterp = nullptr, *pOversampling = nullptr;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FerriteProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LoomProcessor)
 };
-} // namespace ferrite
+} // namespace loom

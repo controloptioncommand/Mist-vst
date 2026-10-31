@@ -3,4 +3,4 @@ cmake-build-*/
 .DS_Store
 *.user
 /dist/
-Ferrite-macOS.zip
+Loom-macOS.zip

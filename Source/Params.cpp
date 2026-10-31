@@ -1,7 +1,7 @@
 #include "Params.h"
 #include "Algorithms.h"
 
-namespace ferrite
+namespace loom
 {
 using APF  = juce::AudioParameterFloat;
 using API  = juce::AudioParameterInt;
@@ -114,6 +114,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     global->addChild (std::make_unique<APF> (pid ("uniDetune"), "Uni Detune", NR (0.0f, 100.0f, 0.0f, 0.5f), 12.0f,
                                              unitAttr ("ct", 1)));
     global->addChild (std::make_unique<APF> (pid ("uniSpread"), "Uni Spread", NR (0.0f, 1.0f), 0.7f, percentAttr()));
+    global->addChild (std::make_unique<APB> (pid ("drone"), "Drone", false));
+    global->addChild (std::make_unique<APC> (pid ("interp"), "Interpolation", juce::StringArray { "Linear", "Hermite" }, 1));
+    global->addChild (std::make_unique<APC> (pid ("oversampling"), "Oversampling", juce::StringArray { "1x", "2x", "4x" }, 1));
     layout.add (std::move (global));
 
     // ---------------- Operators
@@ -125,7 +128,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         auto nm  = [&] (const char* n) { return "Op" + juce::String (i + 1) + " " + n; };
 
         add (std::make_unique<APB> (pid (opId (i, "on")), nm ("On"), true));
-        add (std::make_unique<APC> (pid (opId (i, "mode")), nm ("Mode"), juce::StringArray { "Wave", "Sample" }, 0));
+        add (std::make_unique<APC> (pid (opId (i, "mode")), nm ("Mode"), juce::StringArray { "Scrub", "Sample PM", "Grain" }, 0));
         add (std::make_unique<API> (pid (opId (i, "coarse")), nm ("Coarse"), 0, 32, 1, juce::AudioParameterIntAttributes()
                 .withStringFromValueFunction ([] (int v, int) { return v == 0 ? juce::String ("0.5") : juce::String (v); })));
         add (std::make_unique<APF> (pid (opId (i, "fine")), nm ("Fine"), NR (0.0f, 1.0f), 0.0f, percentAttr()));
@@ -159,6 +162,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         add (std::make_unique<API> (pid (opId (i, "root")),      nm ("Root"), 0, 127, 60, juce::AudioParameterIntAttributes()
                 .withStringFromValueFunction ([] (int v, int) { return juce::MidiMessage::getMidiNoteName (v, true, true, 4); })));
         add (std::make_unique<APB> (pid (opId (i, "keytrack")),  nm ("Keytrack"), true));
+
+        // Grain
+        NR grainSize (0.01f, 1.0f, 0.0f); grainSize.setSkewForCentre (0.12f);
+        add (std::make_unique<APF> (pid (opId (i, "grainSize")),    nm ("Grain Size"),    grainSize, 0.12f, secondsAttr()));
+        add (std::make_unique<APF> (pid (opId (i, "grainDensity")), nm ("Grain Density"), NR (1.0f, 6.0f), 3.0f,
+                                    Attr().withStringFromValueFunction ([] (float v, int) { return "x" + juce::String (v, 1); })));
+        add (std::make_unique<APF> (pid (opId (i, "grainSpray")),   nm ("Grain Spray"),   NR (0.0f, 1.0f), 0.1f, percentAttr()));
 
         layout.add (std::move (g));
     }
@@ -221,4 +231,4 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
 
     return layout;
 }
-} // namespace ferrite
+} // namespace loom

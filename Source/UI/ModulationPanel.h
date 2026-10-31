@@ -2,12 +2,12 @@
 #include "Widgets.h"
 #include "../PluginProcessor.h"
 
-namespace ferrite
+namespace loom
 {
 class FilterPanel : public Section
 {
 public:
-    explicit FilterPanel (FerriteProcessor& p);
+    explicit FilterPanel (LoomProcessor& p);
     void resized() override;
 
 private:
@@ -21,13 +21,13 @@ private:
 class LfoPanel : public Section
 {
 public:
-    LfoPanel (FerriteProcessor& p, int index);
+    LfoPanel (LoomProcessor& p, int index);
     void resized() override;
     void refresh();
     void paintOverChildren (juce::Graphics& g) override;
 
 private:
-    FerriteProcessor& proc;
+    LoomProcessor& proc;
     int index;
     ParamChoice shape { "Shape" }, div { "Division" };
     ParamToggle sync { "Sync" };
@@ -39,7 +39,7 @@ private:
 class ModMatrixPanel : public Section
 {
 public:
-    explicit ModMatrixPanel (FerriteProcessor& p);
+    explicit ModMatrixPanel (LoomProcessor& p);
     void resized() override;
 
 private:
@@ -47,9 +47,25 @@ private:
     {
         juce::ComboBox src, dst;
         juce::Slider amt;
+        juce::Label value;
         std::unique_ptr<APVTS::ComboBoxAttachment> srcA, dstA;
         std::unique_ptr<APVTS::SliderAttachment> amtA;
     };
     std::array<Row, kNumModSlots> rows;
 };
-} // namespace ferrite
+} // namespace loom
+
+namespace loom
+{
+class VoicePage : public juce::Component
+{
+public:
+    explicit VoicePage (LoomProcessor& p);
+    void resized() override;
+
+private:
+    ParamChoice polyMode { "Voice mode" };
+    ParamKnob glide { "Glide" }, bend { "Bend" }, uni { "Unison" }, uniDetune { "Detune" }, uniSpread { "Spread" },
+              fm { "FM Amount" }, master { "Master" };
+};
+} // namespace loom

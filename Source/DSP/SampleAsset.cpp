@@ -1,6 +1,6 @@
 #include "SampleAsset.h"
 
-namespace ferrite
+namespace loom
 {
 float detectPitchMidi (const float* x, int n, double sr)
 {
@@ -199,4 +199,4 @@ std::shared_ptr<SampleAsset> SampleAsset::loadFromEncoded (const juce::MemoryBlo
     if (asset) asset->encoded = flacData;
     return asset;
 }
-} // namespace ferrite
+} // namespace loom

@@ -1,21 +1,21 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 
-namespace ferrite
+namespace loom
 {
-class FerriteProcessor;
+class LoomProcessor;
 
-// Пресеты: файлы *.ferrite (XML, семплы внутри в FLAC/base64) в ~/Music/Ferrite/Presets,
+// Пресеты: файлы *.loom (XML, семплы внутри в FLAC/base64) в ~/Music/Loom/Presets,
 // плюс заводские пресеты, описанные в коде.
 class PresetManager
 {
 public:
-    explicit PresetManager (FerriteProcessor& p);
+    explicit PresetManager (LoomProcessor& p);
 
     struct Entry { juce::String name; juce::String category; juce::File file; int factoryIndex = -1; };
 
     static juce::File getPresetFolder();
-    static constexpr const char* kExtension = ".ferrite";
+    static constexpr const char* kExtension = ".loom";
 
     void refresh();
     const juce::Array<Entry>& getEntries() const { return entries; }
@@ -32,9 +32,9 @@ public:
     int getCurrentIndex() const { return currentIndex; }
 
 private:
-    FerriteProcessor& proc;
+    LoomProcessor& proc;
     juce::Array<Entry> entries;
     juce::String currentName { "Init" };
     int currentIndex = -1;
 };
-} // namespace ferrite
+} // namespace loom

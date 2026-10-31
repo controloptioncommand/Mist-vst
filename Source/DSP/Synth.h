@@ -5,7 +5,7 @@
 #include <array>
 #include <vector>
 
-namespace ferrite
+namespace loom
 {
 // ---------------------------------------------------------------------------
 // Снимок параметров на блок (читается из APVTS в processBlock)
@@ -28,6 +28,7 @@ struct OpSnap
     bool reverse = false;
     int root = 60;
     bool keytrack = true;
+    float grainSize = 0.12f, grainDensity = 3.0f, grainSpray = 0.1f;
     const SampleAsset* asset = nullptr;   // nullptr = нет семпла
     const Wavetable* table = nullptr;     // всегда валиден
 };
@@ -60,6 +61,8 @@ struct Snapshot
 
     std::array<ModSlot, kNumModSlots> slots;
     bool anyModulation = false;
+    bool drone = false;
+    bool hermite = true;
 
     struct LfoSettings { int shape = 0; float rateHz = 1.0f; bool sync = false; int div = 3; } lfo[2];
 };
@@ -77,6 +80,7 @@ class Lfo
 {
 public:
     void reset (double sr) { sampleRate = sr; phase = 0; held = 0; prevHeld = 0; }
+    void setSampleRate (double sr) { sampleRate = sr; }
     // заполняет out[k] значением на начале каждого подблока
     void process (const Snapshot::LfoSettings& s, const BlockInfo& info, int numSamples, std::vector<float>& out);
     float getLastValue() const noexcept { return lastValue; }
@@ -103,6 +107,7 @@ class Voice
 {
 public:
     void prepare (double sr);
+    void setSampleRate (double sr) { sampleRate = sr; }
     void start (int note, float velocity, float glideFromPitch, const Snapshot& s, bool resetPhases);
     void legatoTo (int note, const Snapshot& s);
     void release();
@@ -126,6 +131,7 @@ private:
     inline float readSample (int u, int i, const OpSnap& o, double pmCycles) noexcept;
     inline void advanceSample (int u, int i, const OpSnap& o, double inc) noexcept;
     void initSampleState (int u, int i, const OpSnap& o) noexcept;
+    inline float renderGrains (int u, int i, const OpSnap& o, double pmCycles, double inc, float scanPos, bool hermite) noexcept;
 
     double sampleRate = 44100.0;
     bool active = false, releasing = false;
@@ -146,6 +152,12 @@ private:
     float fb1[kMaxUnison][kNumOps] {}, fb2[kMaxUnison][kNumOps] {};
     int lastAssetLength[kNumOps] {};
 
+    // Grain: до kMaxGrains перекрывающихся зёрен на (унисон, оператор)
+    static constexpr int kMaxGrains = 6;
+    struct Grain { double pos = 0; float age = 0, len = 0; signed char dir = 1; bool on = false; };
+    Grain grains[kMaxUnison][kNumOps][kMaxGrains];
+    float grainTimer[kMaxUnison][kNumOps] {};
+
     SVF filter;
 
     // steal
@@ -155,6 +167,7 @@ private:
     float pendingVel = 0, pendingGlide = 0;
 
     juce::Random rng;
+    bool hermiteRead = true;
 };
 
 // ---------------------------------------------------------------------------
@@ -162,6 +175,8 @@ class Synth
 {
 public:
     void prepare (double sr, int maxBlock);
+    void setSampleRate (double sr);   // без аллокаций (смена оверсемплинга)
+    int getLowestHeldNote() const noexcept;
     void reset();
     void render (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi, const Snapshot& snap, const BlockInfo& info);
 
@@ -184,5 +199,7 @@ private:
     float modWheel = 0, aftertouch = 0, bendNorm = 0;
     std::vector<int> monoStack;
     int lastPolyMode = 0;
+    bool keyDown[128] {};
+    bool lastDrone = false;
 };
-} // namespace ferrite
+} // namespace loom
