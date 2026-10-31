@@ -6,9 +6,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
-    runs-on: macos-15   # Apple Silicon
+    runs-on: macos-15   # Apple Silicon (система сервера сборки; плагин работает на macOS 11+)
     steps:
       - uses: actions/checkout@v4
 
@@ -61,3 +64,16 @@ jobs:
         with:
           name: Loom-macOS
           path: Loom-macOS.zip
+
+      # Публикация: постоянная ссылка
+      # https://github.com/controloptioncommand/loom/releases/latest/download/Loom-macOS.zip
+      - name: Publish release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="build-${{ github.run_number }}"
+          gh release create "$VERSION" Loom-macOS.zip \
+            --title "Loom ($VERSION)" \
+            --notes "Скачайте Loom-macOS.zip, распакуйте и выполните в Терминале: bash ~/Downloads/Loom-macOS/install-mac.sh" \
+            --latest
