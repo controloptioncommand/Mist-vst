@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
 
+# новая сборка отменяет незаконченную предыдущую, чтобы релиз не перезаписала старая
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     # Временно Intel-сервер: у GitHub нет свободных macOS arm64-раннеров. Плагин собирается универсальным
