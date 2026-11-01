@@ -84,6 +84,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="$(tr -d '[:space:]' < VERSION)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # недостающие теги прошлых версий — на их настоящие коммиты
+          grep -v '^#' docs/releases/tags.txt | while read -r TAG SHA; do
+            [ -z "$TAG" ] && continue
+            git rev-parse -q --verify "refs/tags/$TAG" >/dev/null && continue
+            git tag "$TAG" "$SHA" && git push origin "refs/tags/$TAG" && echo "tag: $TAG -> $SHA"
+          done
           for f in $(ls docs/releases/v*.md | sort -V); do
             TAG="$(basename "$f" .md)"
             [ "$TAG" = "$VERSION" ] && continue
