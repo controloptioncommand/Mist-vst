@@ -122,7 +122,7 @@ cmake -B build -DMIST_BUILD_TESTS=ON && cmake --build build --target MistRenderT
 | `Source/DSP/` | Синтез: голоса, операторы, зёрна, LFO, wavetable, детектор высоты тона, огибающие, фильтр |
 | `Source/Algorithms.cpp` | 32 алгоритма |
 | `Source/Randomizer.cpp` | Кубик и его «безопасные» диапазоны |
-| `Source/UI/` | Интерфейс, темы Oxygen / Rubber, главный вид, About и сова |
+| `Source/UI/` | Интерфейс, темы Oxygen / Rubber, главный вид, страница About |
 
 Написан на C++ и [JUCE 8](https://juce.com). Логотип набран шрифтом [Medeo Pixel](https://github.com/DNFDEVS/medeo-font) (SIL Open Font License, файл лицензии — `Resources/Fonts/OFL.txt`).
 
