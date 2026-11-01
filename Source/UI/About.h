@@ -7,7 +7,7 @@ namespace mist
 namespace AboutInfo
 {
     inline const char* version = "v2";
-    inline const char* repoUrl = "https://github.com/controloptioncommand/Mist";
+    inline const char* repoUrl = "https://github.com/controloptioncommand/Mist-vst";
     inline const char* authorUrl = "https://t.me/nothiingnothingnothing";
     inline const char* date = "1st November 2026";
     inline const char* author = "made by nnn";

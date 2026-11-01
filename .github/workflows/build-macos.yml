@@ -14,6 +14,18 @@ jobs:
     runs-on: macos-15   # Apple Silicon (система сервера сборки; плагин работает на macOS 11+)
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # вся история и теги — для проверки приватности и релизов
+
+      # Ничего личного в публичный репозиторий: почты, ключи, ссылки на переписку с ИИ
+      - name: Privacy check
+        run: bash scripts/privacy-check.sh
+
+      # У каждой версии должен быть патчноут: docs/releases/<VERSION>.md
+      - name: Release notes check
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          test -s "docs/releases/$VERSION.md" || { echo "::error::Нет патчноута docs/releases/$VERSION.md"; exit 1; }
 
       - name: Cache JUCE
         uses: actions/cache@v4
@@ -65,14 +77,33 @@ jobs:
           name: Mist-macOS
           path: Mist-macOS.zip
 
-      # Публикация: постоянная ссылка
-      # https://github.com/controloptioncommand/mist/releases/latest/download/Mist-macOS.zip
+      # Прошлые версии (v1 … v1.07): релизы только с патчноутом, если для тега ещё нет релиза
+      - name: Publish notes for earlier versions
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          for f in $(ls docs/releases/v*.md | sort -V); do
+            TAG="$(basename "$f" .md)"
+            [ "$TAG" = "$VERSION" ] && continue
+            git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || continue
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              gh release edit "$TAG" --title "$TAG" --notes-file "$f"
+            else
+              gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$f" --latest=false
+            fi
+            echo "notes: $TAG"
+          done
+
+      # Текущая версия: архив + патчноут. Постоянная ссылка:
+      # https://github.com/controloptioncommand/Mist-vst/releases/latest/download/Mist-macOS.zip
       - name: Publish release
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # имя релиза берётся из файла VERSION (v1, v1.01, …, v2); повторная сборка той же версии обновляет релиз
+          # имя релиза — из файла VERSION; повторная сборка той же версии обновляет релиз
           VERSION="$(tr -d '[:space:]' < VERSION)"
           gh release delete "$VERSION" --cleanup-tag -y || true
           gh release create "$VERSION" Mist-macOS.zip \
@@ -80,14 +111,3 @@ jobs:
             --title "$VERSION" \
             --notes-file "docs/releases/$VERSION.md" \
             --latest
-
-      # Release notes для всех версий берутся из docs/releases/<версия>.md
-      - name: Sync release notes
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for f in docs/releases/*.md; do
-            TAG="$(basename "$f" .md)"
-            gh release view "$TAG" >/dev/null 2>&1 && gh release edit "$TAG" --title "$TAG" --notes-file "$f" && echo "notes: $TAG"
-          done

@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/controloptioncommand/Mist/releases/latest/download/Mist-macOS.zip"><b>⬇ Скачать Mist для macOS</b></a>
+  <a href="https://github.com/controloptioncommand/Mist-vst/releases/latest/download/Mist-macOS.zip"><b>⬇ Скачать Mist для macOS</b></a>
 </p>
 
 ---
@@ -89,7 +89,7 @@
 
 ## Установка
 
-1. Скачайте **[Mist-macOS.zip](https://github.com/controloptioncommand/Mist/releases/latest/download/Mist-macOS.zip)** и распакуйте двойным кликом.
+1. Скачайте **[Mist-macOS.zip](https://github.com/controloptioncommand/Mist-vst/releases/latest/download/Mist-macOS.zip)** и распакуйте двойным кликом.
 2. Откройте Терминал и выполните:
    ```bash
    bash ~/Downloads/Mist-macOS/install-mac.sh
@@ -97,7 +97,7 @@
    Скрипт кладёт `Mist.vst3` и `Mist.component` в `~/Library/Audio/Plug-Ins` и снимает карантин macOS: плагин не подписан сертификатом Apple.
 3. Перезапустите Ableton. Если Mist не появился: Settings → Plug-Ins → Rescan.
 
-Нужен Mac на Apple Silicon и macOS 11 или новее. Каждое изменение в `main` автоматически собирается, проходит pluginval и auval и выкладывается в [Releases](https://github.com/controloptioncommand/Mist/releases).
+Нужен Mac на Apple Silicon и macOS 11 или новее. Каждое изменение в `main` автоматически собирается, проходит pluginval и auval и выкладывается в [Releases](https://github.com/controloptioncommand/Mist-vst/releases).
 
 ## Как пользоваться за минуту
 
