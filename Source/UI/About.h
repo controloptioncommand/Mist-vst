@@ -60,10 +60,12 @@ private:
         BackLogo() : juce::Button ("Mist") { setTitle ("Back to Mist"); }
         void paintButton (juce::Graphics&, bool over, bool down) override;
     };
-    struct PlayButton : juce::Button
+    struct SecretLogo : juce::Component
     {
-        PlayButton() : juce::Button ("Play") { setTitle ("Play the owl game"); }
-        void paintButton (juce::Graphics&, bool over, bool down) override;
+        std::function<void()> onSecretClicks;
+        void mouseDown (const juce::MouseEvent&) override;
+        juce::uint32 lastClick = 0;
+        int clicks = 0;
     };
     struct CapsuleButton : juce::Button
     {
@@ -71,10 +73,10 @@ private:
         void paintButton (juce::Graphics&, bool over, bool down) override;
     };
 
-    void drawVersion (juce::Graphics& g, juce::Rectangle<float> r);
+    void drawVersion (juce::Graphics& g, juce::Rectangle<float> r, bool centred = true);
 
     BackLogo back;
-    PlayButton play;
+    SecretLogo logoHit;
     CapsuleButton closeGame { "Close game" };
     GameView game;
     bool gameMode = false;

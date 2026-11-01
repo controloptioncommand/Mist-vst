@@ -245,24 +245,6 @@ void AboutPage::BackLogo::paintButton (juce::Graphics& g, bool over, bool)
     if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, getLocalBounds().toFloat(), 8.0f);
 }
 
-void AboutPage::PlayButton::paintButton (juce::Graphics& g, bool over, bool down)
-{
-    auto r = getLocalBounds().toFloat();
-    auto fill = Colours::signal;
-    if (over) fill = fill.overlaidWith (Colours::onSignal.withAlpha (0.06f));
-    if (down) fill = fill.overlaidWith (Colours::onSignal.withAlpha (0.12f));
-    g.setColour (fill);
-    g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
-    // маленькая сова слева, текст справа от неё — фиксированная раскладка, без наложения
-    const int owlW = 12 * 2, owlX = 24;
-    drawOwl (g, { owlX, (getHeight() - 26) / 2 }, 2, 0);
-    g.setColour (Colours::onSignal);
-    g.setFont (LnF::font (LnF::Type::body, true));
-    g.drawText ("Play", juce::Rectangle<int> (owlX + owlW + 12, 0, getWidth() - (owlX + owlW + 12) - 12, getHeight()),
-                juce::Justification::centredLeft, false);
-    if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, r.expanded (3.0f), r.getHeight() * 0.5f + 3.0f);
-}
-
 void AboutPage::CapsuleButton::paintButton (juce::Graphics& g, bool over, bool down)
 {
     auto r = getLocalBounds().toFloat().reduced (0.5f);
@@ -279,23 +261,37 @@ void AboutPage::CapsuleButton::paintButton (juce::Graphics& g, bool over, bool d
     if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, r.expanded (3.0f), r.getHeight() * 0.5f + 3.0f);
 }
 
+void AboutPage::SecretLogo::mouseDown (const juce::MouseEvent&)
+{
+    // пасхалка: пять быстрых кликов по большому логотипу открывают игру
+    const auto now = juce::Time::getMillisecondCounter();
+    clicks = (now - lastClick < 450) ? clicks + 1 : 1;
+    lastClick = now;
+    if (clicks >= 5)
+    {
+        clicks = 0;
+        if (onSecretClicks) onSecretClicks();
+    }
+}
+
 AboutPage::AboutPage()
 {
     setTitle ("About Mist");
     setDescription (juce::String ("Mist ") + AboutInfo::version + ", " + AboutInfo::date + ", " + AboutInfo::author);
     addAndMakeVisible (back);
-    addAndMakeVisible (play);
+    addAndMakeVisible (logoHit);
+    logoHit.setTitle ("Mist logo");
+    logoHit.onSecretClicks = [this] { showGame (true); };
     addChildComponent (closeGame);
     addChildComponent (game);
     back.onClick = [this] { showGame (false); if (onClose) onClose(); };
-    play.onClick = [this] { showGame (true); };
     closeGame.onClick = [this] { showGame (false); };
 }
 
 void AboutPage::showGame (bool show)
 {
     gameMode = show;
-    play.setVisible (! show);
+    logoHit.setVisible (! show);
     game.setVisible (show);
     closeGame.setVisible (show);
     if (show) game.start(); else game.stop();
@@ -303,14 +299,14 @@ void AboutPage::showGame (bool show)
     repaint();
 }
 
-void AboutPage::drawVersion (juce::Graphics& g, juce::Rectangle<float> r)
+void AboutPage::drawVersion (juce::Graphics& g, juce::Rectangle<float> r, bool centred)
 {
     const auto bold = LnF::font (LnF::Type::callout, true), regular = LnF::font (LnF::Type::callout);
     const juce::String v (AboutInfo::version), sep (midDot()), d (AboutInfo::date);
     const float wv = (float) juce::GlyphArrangement::getStringWidth (bold, v);
     const float ws = (float) juce::GlyphArrangement::getStringWidth (regular, sep);
     const float wd = (float) juce::GlyphArrangement::getStringWidth (regular, d);
-    float x = r.getCentreX() - (wv + ws + wd) * 0.5f;
+    float x = centred ? r.getCentreX() - (wv + ws + wd) * 0.5f : r.getX();
     g.setColour (Colours::ink);  g.setFont (bold);    g.drawText (v, juce::Rectangle<float> (x, r.getY(), wv + 2, r.getHeight()), juce::Justification::centredLeft); x += wv;
     g.setColour (Colours::ink2); g.setFont (regular); g.drawText (sep, juce::Rectangle<float> (x, r.getY(), ws + 2, r.getHeight()), juce::Justification::centredLeft); x += ws;
     g.drawText (d, juce::Rectangle<float> (x, r.getY(), wd + 2, r.getHeight()), juce::Justification::centredLeft);
@@ -334,12 +330,13 @@ void AboutPage::paint (juce::Graphics& g)
     g.setFont (f);
     g.drawText ("Mist", bigLogo, juce::Justification::centred);
 
-    drawVersion (g, versionLine);
-
-    // никнейм — в левом нижнем углу
+    // под логотипом — автор
     g.setColour (Colours::ink2);
-    g.setFont (LnF::font (LnF::Type::footnote));
-    g.drawText (AboutInfo::author, juce::Rectangle<int> (28, getHeight() - 40, 300, 16), juce::Justification::centredLeft);
+    g.setFont (LnF::font (LnF::Type::callout));
+    g.drawText (AboutInfo::author, versionLine, juce::Justification::centred);
+
+    // версия и дата — в левом нижнем углу
+    drawVersion (g, juce::Rectangle<float> (28.0f, (float) getHeight() - 42.0f, 400.0f, 18.0f), false);
 
     if (gameMode)
     {
@@ -358,7 +355,7 @@ void AboutPage::resized()
     {
         bigLogo = { 0.0f, H * 0.33f, W, 140.0f };
         versionLine = { 0.0f, bigLogo.getBottom() + 4.0f, W, 18.0f };
-        play.setBounds ((int) (W * 0.5f) - 66, (int) versionLine.getBottom() + 28, 132, 40);
+        logoHit.setBounds (bigLogo.withSizeKeepingCentre (360.0f, bigLogo.getHeight()).toNearestInt());
     }
     else
     {
