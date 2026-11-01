@@ -11,7 +11,7 @@ inline juce::String midDot() { return juce::String::fromUTF8 (" \xc2\xb7 "); }
 // Старые имена (bg, panel, ...) оставлены как псевдонимы ролей.
 namespace Colours
 {
-    inline juce::Colour window, surface, well, track, ink, ink2, signal, onSignal, carrier, modulator, live, glass;
+    inline juce::Colour window, surface, well, track, ink, ink2, signal, onSignal, carrier, modulator, live;
     inline juce::Colour outline;                                     // рамка 1 px
     inline std::array<juce::Colour, 3> carrierRamp, modulatorRamp;   // тихо / основной / пик
 
@@ -65,8 +65,7 @@ public:
     juce::Label* createSliderTextBox (juce::Slider&) override;
     void drawLabel (juce::Graphics&, juce::Label&) override;
 
-    // Типографика: системный шрифт по шкале macOS, числа — системный моноширинный,
-    // Medeo Pixel — только название Mist и логотип.
+    // Типографика: Medeo Sans по шкале macOS, числа — Medeo Mono, Medeo Pixel — только название Mist и логотип.
     struct Type
     {
         static constexpr float largeTitle = 26.0f, title1 = 22.0f, title2 = 17.0f, title3 = 15.0f,
@@ -78,8 +77,9 @@ public:
     static juce::Font pixel (float size);
 
     static void drawSwitch (juce::Graphics&, juce::Rectangle<float> r, bool on, juce::Colour onColour);
-    // Стекло — только функциональный слой (тулбар, чипы, вкладки вида, легенда, кнопка закрытия)
-    static void drawGlass (juce::Graphics&, juce::Rectangle<float> r, float radius);
+    // Плотная плашка (Surface или заданный цвет + рамка 1 px) — тулбар, чипы, вкладки вида, легенда
+    static void drawPlate (juce::Graphics&, juce::Rectangle<float> r, float radius, juce::Colour fill = {});
+    juce::Typeface::Ptr getTypefaceForFont (const juce::Font&) override;
     static void drawFocusRing (juce::Graphics&, juce::Rectangle<float> r, float radius);
 };
 } // namespace mist

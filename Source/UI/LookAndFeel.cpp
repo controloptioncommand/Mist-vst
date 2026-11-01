@@ -10,27 +10,20 @@ namespace
 struct Palette
 {
     juce::uint32 window, surface, well, track, ink, ink2, signal, onSignal, carrier, modulator, live;
-    juce::Colour glass;
     std::array<juce::uint32, 3> carrierRamp, modulatorRamp;
-    float highlightAlpha;   // внутренний светлый блик стекла
 };
 
 const Palette oxygen {
     0xffE4E5E1, 0xffF5F5F2, 0xffE9EAE6, 0xffC2C3BE, 0xff131416, 0xff4B4D52, 0xffE84A00, 0xff131416,
     0xff2740F0, 0xffD7245E, 0xff138A62,
-    juce::Colour ((juce::uint8) 245, (juce::uint8) 245, (juce::uint8) 242, 0.55f),
-    { 0xff6676E6, 0xff2740F0, 0xffE84A00 }, { 0xffD4577F, 0xffD7245E, 0xffE84A00 },
-    0.70f };
+    { 0xff6676E6, 0xff2740F0, 0xffE84A00 }, { 0xffD4577F, 0xffD7245E, 0xffE84A00 } };
 
 const Palette rubber {
     0xff0F1012, 0xff18191C, 0xff121316, 0xff3E3F45, 0xffEDEDE9, 0xffA9AAAE, 0xffFF6B2C, 0xff131416,
     0xff8EA0FF, 0xffFF7AA2, 0xff4CD9A6,
-    juce::Colour ((juce::uint8) 36, (juce::uint8) 37, (juce::uint8) 41, 0.5f),
-    { 0xff5C69C9, 0xff8EA0FF, 0xffFF6B2C }, { 0xffC25A82, 0xffFF7AA2, 0xffFF6B2C },
-    0.10f };
+    { 0xff5C69C9, 0xff8EA0FF, 0xffFF6B2C }, { 0xffC25A82, 0xffFF7AA2, 0xffFF6B2C } };
 
 ThemeId gTheme = ThemeId::Oxygen;
-float gHighlight = 0.7f;
 bool gReduceTransparency = false, gReduceMotion = false;
 
 bool readMacDefault (const char* key)
@@ -61,14 +54,12 @@ void applyTheme (ThemeId id)
     Colours::track = C (p.track);     Colours::ink = C (p.ink);         Colours::ink2 = C (p.ink2);
     Colours::signal = C (p.signal);   Colours::onSignal = C (p.onSignal);
     Colours::carrier = C (p.carrier); Colours::modulator = C (p.modulator); Colours::live = C (p.live);
-    Colours::glass = p.glass;
     Colours::outline = Colours::ink.withAlpha (0.12f);
     for (int i = 0; i < 3; ++i)
     {
         Colours::carrierRamp[(size_t) i] = C (p.carrierRamp[(size_t) i]);
         Colours::modulatorRamp[(size_t) i] = C (p.modulatorRamp[(size_t) i]);
     }
-    gHighlight = p.highlightAlpha;
 
     Colours::bg = Colours::window;   Colours::panel = Colours::surface; Colours::panelHi = Colours::well;
     Colours::text = Colours::ink;    Colours::textDim = Colours::ink2;
@@ -122,30 +113,35 @@ juce::Colour rampBucketColour (const std::array<juce::Colour, 3>& ramp, int buck
 // Шрифты
 namespace
 {
-juce::Typeface::Ptr pixelTypeface()
+// Шрифты Medeo (SIL OFL), встроены через BinaryData:
+// Sans — весь интерфейс, Mono — числа и значения, Pixel — только название Mist и логотип
+struct Typefaces
 {
-    // Medeo Pixel (SIL OFL), встроен через BinaryData
-    static juce::Typeface::Ptr tf = juce::Typeface::createSystemTypefaceFor (MistFonts::MedeoPixelRegular_ttf,
-                                                                             (size_t) MistFonts::MedeoPixelRegular_ttfSize);
-    return tf;
-}
+    juce::Typeface::Ptr sans, sansBold, mono, monoBold, pixel;
+    Typefaces()
+    {
+        auto load = [] (const void* d, int n) { return juce::Typeface::createSystemTypefaceFor (d, (size_t) n); };
+        sans     = load (MistFonts::MedeoSansRegular_ttf,  MistFonts::MedeoSansRegular_ttfSize);
+        sansBold = load (MistFonts::MedeoSansSemiBold_ttf, MistFonts::MedeoSansSemiBold_ttfSize);
+        mono     = load (MistFonts::MedeoMonoRegular_ttf,  MistFonts::MedeoMonoRegular_ttfSize);
+        monoBold = load (MistFonts::MedeoMonoSemiBold_ttf, MistFonts::MedeoMonoSemiBold_ttfSize);
+        pixel    = load (MistFonts::MedeoPixelRegular_ttf, MistFonts::MedeoPixelRegular_ttfSize);
+    }
+};
+const Typefaces& typefaces() { static const Typefaces t; return t; }
+juce::Font makeFont (juce::Typeface::Ptr tf, float size) { return juce::Font (juce::FontOptions (tf).withHeight (size)); }
 } // namespace
 
-juce::Font MistLookAndFeel::font (float size, bool bold)
-{
-    // системный шрифт без засечек (SF Pro на Mac)
-    return juce::Font (juce::FontOptions (size, bold ? juce::Font::bold : juce::Font::plain));
-}
+juce::Font MistLookAndFeel::font (float size, bool bold)  { return makeFont (bold ? typefaces().sansBold : typefaces().sans, size); }
+juce::Font MistLookAndFeel::mono (float size, bool bold)  { return makeFont (bold ? typefaces().monoBold : typefaces().mono, size); }
+juce::Font MistLookAndFeel::pixel (float size)            { return makeFont (typefaces().pixel, size); }
 
-juce::Font MistLookAndFeel::mono (float size, bool bold)
+juce::Typeface::Ptr MistLookAndFeel::getTypefaceForFont (const juce::Font& f)
 {
-    return juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), size,
-                                          bold ? juce::Font::bold : juce::Font::plain));
-}
-
-juce::Font MistLookAndFeel::pixel (float size)
-{
-    return juce::Font (juce::FontOptions (pixelTypeface()).withHeight (size));
+    // всё, что рисуется шрифтом «по умолчанию» (меню, диалоги, поля ввода), — Medeo Sans
+    if (f.getTypefaceName() == juce::Font::getDefaultSansSerifFontName() || f.getTypefaceName().isEmpty())
+        return f.isBold() ? typefaces().sansBold : typefaces().sans;
+    return LookAndFeel_V4::getTypefaceForFont (f);
 }
 
 // ---------------------------------------------------------------------------
@@ -202,21 +198,13 @@ void MistLookAndFeel::drawFocusRing (juce::Graphics& g, juce::Rectangle<float> r
     g.drawRoundedRectangle (r.reduced (1.0f), juce::jmax (0.0f, radius - 1.0f), 2.0f);
 }
 
-void MistLookAndFeel::drawGlass (juce::Graphics& g, juce::Rectangle<float> r, float radius)
+void MistLookAndFeel::drawPlate (juce::Graphics& g, juce::Rectangle<float> r, float radius, juce::Colour fill)
 {
-    // «Уменьшить прозрачность» → стекло становится плотным (цвет поверхности)
-    g.setColour (Accessibility::reduceTransparency() ? Colours::surface : Colours::glass);
+    // плотная плашка: заливка + рамка 1 px. Без стекла, бликов и теней.
+    g.setColour (fill.isTransparent() ? Colours::surface : fill);
     g.fillRoundedRectangle (r, radius);
     g.setColour (Colours::outline);
     g.drawRoundedRectangle (r.reduced (0.5f), radius, 1.0f);
-    // внутренний светлый блик сверху
-    juce::Path hl;
-    const auto in = r.reduced (1.0f);
-    const float rr = juce::jmax (0.0f, radius - 1.0f);
-    hl.startNewSubPath (in.getX() + rr * 0.6f, in.getY() + 0.5f);
-    hl.lineTo (in.getRight() - rr * 0.6f, in.getY() + 0.5f);
-    g.setColour (juce::Colours::white.withAlpha (gHighlight));
-    g.strokePath (hl, juce::PathStrokeType (1.0f));
 }
 
 void MistLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos,
@@ -225,7 +213,7 @@ void MistLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, 
     const auto bounds = juce::Rectangle<int> (x, y, w, h).toFloat().reduced (3.0f);
     const float r = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f;
     const auto c = bounds.getCentre();
-    const float lineW = juce::jmax (2.5f, r * 0.12f);
+    const float lineW = 3.0f;   // подложка и дуга значения — 3 px
     const float arcR = r - lineW * 0.5f;
     const float angle = startAngle + pos * (endAngle - startAngle);
 
@@ -245,16 +233,14 @@ void MistLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, 
         g.strokePath (val, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 
-    const float knobR = r - lineW - 3.0f;
-    g.setColour (Colours::surface);
-    g.fillEllipse (c.x - knobR, c.y - knobR, knobR * 2, knobR * 2);
-    g.setColour (Colours::outline);
-    g.drawEllipse (c.x - knobR, c.y - knobR, knobR * 2, knobR * 2, 1.0f);
-
-    const float p0 = knobR * 0.25f, p1 = knobR * 0.78f;
+    // риска-указатель: тонкая линия Ink от центра к дуге, без колпачка
+    const float p1 = arcR - lineW - 2.0f;
     const auto dir = juce::Point<float> (std::sin (angle), -std::cos (angle));
+    juce::Path tick;
+    tick.startNewSubPath (c);
+    tick.lineTo (c + dir * p1);
     g.setColour (s.isEnabled() ? Colours::ink : Colours::ink2);
-    g.drawLine ({ c + dir * p0, c + dir * p1 }, juce::jmax (1.6f, r * 0.07f));
+    g.strokePath (tick, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
     if (s.hasKeyboardFocus (false))
         drawFocusRing (g, juce::Rectangle<float> (c.x - r - 3.0f, c.y - r - 3.0f, (r + 3.0f) * 2, (r + 3.0f) * 2), r + 3.0f);
@@ -294,10 +280,10 @@ void MistLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& b, 
     if (b.getProperties().contains ("chipH"))
         r = r.withSizeKeepingCentre (r.getWidth(), juce::jmin (r.getHeight(), (float) (double) b.getProperties()["chipH"]));
     r = r.reduced (0.5f);
-    const float rad = r.getHeight() * 0.5f;
+    const float rad = juce::jmin (r.getHeight() * 0.5f, 8.0f);   // контролы — радиус 8, капсулы только у сегментов и переключателей
 
-    if (b.getProperties()["glass"])
-        drawGlass (g, r, rad);
+    if (b.getProperties()["plate"])
+        drawPlate (g, r, rad);
     else
     {
         auto base = b.getToggleState() ? Colours::signal : Colours::well;
@@ -351,7 +337,7 @@ void MistLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& b
 void MistLookAndFeel::drawComboBox (juce::Graphics& g, int w, int h, bool, int, int, int, int, juce::ComboBox& box)
 {
     auto r = juce::Rectangle<int> (0, 0, w, h).toFloat().reduced (0.5f);
-    const float rad = juce::jmin (r.getHeight() * 0.5f, 10.0f);
+    const float rad = juce::jmin (r.getHeight() * 0.5f, 8.0f);
     g.setColour (Colours::well);
     g.fillRoundedRectangle (r, rad);
     g.setColour (Colours::outline);

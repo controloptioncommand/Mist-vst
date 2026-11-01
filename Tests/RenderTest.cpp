@@ -307,6 +307,22 @@ int main (int argc, char** argv)
                 std::cout << "  spectrum view paint: " << juce::String (paintMs / 30.0, 2) << " ms/frame\n";
             }
             le->showAboutForTest (true, false); pump (5, false); shoot ("about_" + tn);
+            {
+                // «Туман»: сдуваем курсором, кадр в полёте, затем слово должно собраться за ~1 с
+                auto& fog = le->getAboutForTest().getFogForTest();
+                std::cout << "  fog particles: " << fog.getNumParticles() << "\n";
+                CHECK (fog.getNumParticles() > 150, "fog: too few particles");
+                const auto c = fog.getLocalBounds().getCentre().toFloat();
+                fog.blowForTest ({ c.x - 160.0f, c.y }, { c.x + 40.0f, c.y + 10.0f }, 12);
+                CHECK (fog.isAnimating(), "fog: did not start");
+                fog.stepForTest (8);
+                juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+                shoot ("about_" + tn + "_fog");
+                fog.stepForTest (90);
+                CHECK (! fog.isAnimating(), "fog: did not settle within ~1.5 s");
+                juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+                shoot ("about_" + tn + "_settled");
+            }
             le->showAboutForTest (true, true);  pump (40, false); shoot ("game_" + tn);
             le->showAboutForTest (false, false);
         }

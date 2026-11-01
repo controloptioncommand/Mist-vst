@@ -87,7 +87,7 @@ void SampleSlot::paint (juce::Graphics& g)
     // карточка плотная, без стекла и теней
     g.setColour (Colours::surface);
     g.fillRoundedRectangle (r, radius);
-    g.setColour (selected ? Colours::ink2 : Colours::outline);
+    g.setColour (selected ? Colours::ink : Colours::outline);   // выбранная карточка — рамка Ink
     g.drawRoundedRectangle (r.reduced (0.5f), radius, 1.0f);
 
     auto asset = proc.getSample (op);

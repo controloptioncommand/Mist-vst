@@ -327,7 +327,9 @@ void Visualizer::paintSpectrum (juce::Graphics& g, juce::Rectangle<float> area)
 void Visualizer::paintOverlay (juce::Graphics& g)
 {
     // легенда
-    LnF::drawGlass (g, legendArea, legendArea.getHeight() * 0.5f);
+    // плашки на виде: если фон вида Surface — плашки Well, и наоборот
+    const auto plateFill = currentTheme() == ThemeId::Rubber ? Colours::surface : Colours::well;
+    LnF::drawPlate (g, legendArea, 8.0f, plateFill);
     {
         auto r = legendArea.reduced (12.0f, 0.0f);
         g.setFont (LnF::mono (LnF::Type::footnote));
@@ -344,13 +346,13 @@ void Visualizer::paintOverlay (juce::Graphics& g)
     }
 
     // чип «Result preview»
-    LnF::drawGlass (g, previewChip, previewChip.getHeight() * 0.5f);
+    LnF::drawPlate (g, previewChip, 8.0f, plateFill);
     g.setFont (LnF::font (LnF::Type::subheadline));
     g.setColour (Colours::ink);
     g.drawText ("Result preview", previewChip, juce::Justification::centred);
 
     // стеклянные вкладки вида
-    LnF::drawGlass (g, tabsArea, tabsArea.getHeight() * 0.5f);
+    LnF::drawPlate (g, tabsArea, tabsArea.getHeight() * 0.5f, plateFill);   // сегменты — капсула
     const float w = (tabsArea.getWidth() - 4.0f) / 3.0f;
     for (int i = 0; i < 3; ++i)
     {
@@ -358,7 +360,7 @@ void Visualizer::paintOverlay (juce::Graphics& g)
         const bool sel = (int) mode == i;
         if (sel)
         {
-            g.setColour (Colours::surface);
+            g.setColour (currentTheme() == ThemeId::Rubber ? Colours::well : Colours::surface);
             g.fillRoundedRectangle (cell, cell.getHeight() * 0.5f);
             g.setColour (Colours::outline);
             g.drawRoundedRectangle (cell.reduced (0.5f), cell.getHeight() * 0.5f, 1.0f);
@@ -374,7 +376,7 @@ void Visualizer::paintOverlay (juce::Graphics& g)
 void Visualizer::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat();
-    const float radius = 14.0f;
+    const float radius = 12.0f;
     g.setColour (background());
     g.fillRoundedRectangle (r, radius);
     {

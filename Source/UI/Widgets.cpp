@@ -106,7 +106,7 @@ void drawCard (juce::Graphics& g, juce::Rectangle<float> r, float radius, bool s
 void Section::paint (juce::Graphics& g)
 {
     if (flat) return;
-    drawCard (g, getLocalBounds().toFloat(), 10.0f, false);
+    drawCard (g, getLocalBounds().toFloat(), 12.0f, false);
     g.setColour (Colours::text);
     g.setFont (MistLookAndFeel::font (MistLookAndFeel::Type::headline, true));
     g.drawText (title, juce::Rectangle<int> (12, 7, getWidth() - 24, 18), juce::Justification::centredLeft);

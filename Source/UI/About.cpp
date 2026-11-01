@@ -250,18 +250,108 @@ void AboutPage::CapsuleButton::paintButton (juce::Graphics& g, bool over, bool d
     if (over) fill = fill.overlaidWith (Colours::ink.withAlpha (0.04f));
     if (down) fill = fill.overlaidWith (Colours::ink.withAlpha (0.08f));
     g.setColour (fill);
-    g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
+    g.fillRoundedRectangle (r, 10.0f);
     g.setColour (Colours::outline);
-    g.drawRoundedRectangle (r, r.getHeight() * 0.5f, 1.0f);
+    g.drawRoundedRectangle (r, 10.0f, 1.0f);
     g.setColour (Colours::ink);
     g.setFont (LnF::font (LnF::Type::body));
     g.drawText (getButtonText(), getLocalBounds(), juce::Justification::centred);
-    if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, r.expanded (3.0f), r.getHeight() * 0.5f + 3.0f);
+    if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, r.expanded (3.0f), 13.0f);
 }
 
-void AboutPage::SecretLogo::mouseDown (const juce::MouseEvent&)
+// ===========================================================================
+// Туман
+FogLogo::FogLogo()
 {
-    // пасхалка: пять быстрых кликов по большому логотипу открывают игру
+    setTitle ("Mist");
+    setDescription ("Mist logo");
+}
+
+void FogLogo::setWordArea (juce::Rectangle<float> textRectInParent, float targetWidth)
+{
+    targetW = targetWidth;
+    // компонент шире слова: частицам есть куда разлетаться (≈ 15 клеток)
+    const float margin = targetWidth / 50.0f * 16.0f;
+    auto area = textRectInParent.withSizeKeepingCentre (targetWidth + margin * 2.0f, textRectInParent.getHeight() + margin * 2.0f);
+    textRect = textRectInParent - area.getPosition();
+    setBounds (area.toNearestInt());
+    textRect = textRectInParent - getPosition().toFloat();
+    build();
+}
+
+void FogLogo::build()
+{
+    particles.clear();
+    stopTimer();
+    auto f = LnF::pixel (100.0f);
+    const float w100 = (float) juce::GlyphArrangement::getStringWidth (f, "Mist");
+    font = LnF::pixel (100.0f * targetW / juce::jmax (1.0f, w100));
+    if (textRect.isEmpty()) return;
+
+    // рисуем слово в offscreen (x4) и снимаем сетку пикселей шрифта: 50 × 19 клеток
+    const int k = 4;
+    juce::Image img (juce::Image::ARGB, (int) textRect.getWidth() * k, (int) textRect.getHeight() * k, true);
+    {
+        juce::Graphics g (img);
+        g.addTransform (juce::AffineTransform::scale ((float) k));
+        g.setColour (juce::Colours::white);
+        g.setFont (font);
+        g.drawText ("Mist", juce::Rectangle<float> (0, 0, textRect.getWidth(), textRect.getHeight()), juce::Justification::centred);
+    }
+    int x0 = img.getWidth(), y0 = img.getHeight(), x1 = -1, y1 = -1;
+    {
+        juce::Image::BitmapData bd (img, juce::Image::BitmapData::readOnly);
+        for (int y = 0; y < img.getHeight(); ++y)
+            for (int x = 0; x < img.getWidth(); ++x)
+                if (bd.getPixelColour (x, y).getAlpha() > 127)
+                    { x0 = juce::jmin (x0, x); y0 = juce::jmin (y0, y); x1 = juce::jmax (x1, x); y1 = juce::jmax (y1, y); }
+    }
+    if (x1 < x0) return;
+    const float cw = (float) (x1 - x0 + 1) / 50.0f, ch = (float) (y1 - y0 + 1) / 19.0f;
+    cell = cw / (float) k;
+    wordBounds = juce::Rectangle<float> ((float) x0, (float) y0, (float) (x1 - x0 + 1), (float) (y1 - y0 + 1)) / (float) k + textRect.getPosition();
+
+    juce::Image::BitmapData bd (img, juce::Image::BitmapData::readOnly);
+    for (int j = 0; j < 19; ++j)
+        for (int i = 0; i < 50; ++i)
+        {
+            const int sx = (int) ((float) x0 + ((float) i + 0.5f) * cw), sy = (int) ((float) y0 + ((float) j + 0.5f) * ch);
+            if (bd.getPixelColour (sx, sy).getAlpha() > 127)
+            {
+                Particle p;
+                p.home = juce::Rectangle<float> ((float) x0 + (float) i * cw, (float) y0 + (float) j * ch, cw, ch) / (float) k + textRect.getPosition();
+                particles.push_back (p);
+            }
+        }
+}
+
+void FogLogo::paint (juce::Graphics& g)
+{
+    if (! isTimerRunning())
+    {
+        // в покое — обычный текст, ровно как раньше
+        g.setColour (Colours::ink);
+        g.setFont (font);
+        g.drawText ("Mist", textRect, juce::Justification::centred);
+        return;
+    }
+    const float maxR = cell * 15.0f;
+    for (auto& p : particles)
+    {
+        const float d = p.off.getDistanceFromOrigin();
+        const float alpha = 1.0f - 0.85f * juce::jmin (1.0f, d / maxR);
+        g.setColour ((p.signal ? Colours::signal : Colours::ink).withAlpha (alpha));
+        // квадраты на целых пикселях, без сглаживания
+        const int x = juce::roundToInt (p.home.getX() + p.off.x), y = juce::roundToInt (p.home.getY() + p.off.y);
+        const int r = juce::roundToInt (p.home.getRight() + p.off.x), b = juce::roundToInt (p.home.getBottom() + p.off.y);
+        g.fillRect (x, y, juce::jmax (1, r - x), juce::jmax (1, b - y));
+    }
+}
+
+void FogLogo::mouseDown (const juce::MouseEvent& e)
+{
+    // пасхалка: пять быстрых кликов по слову (в покое) открывают игру; клик не сдувает
+    if (! wordBounds.contains (e.position)) return;
     const auto now = juce::Time::getMillisecondCounter();
     clicks = (now - lastClick < 450) ? clicks + 1 : 1;
     lastClick = now;
@@ -269,6 +359,89 @@ void AboutPage::SecretLogo::mouseDown (const juce::MouseEvent&)
     {
         clicks = 0;
         if (onSecretClicks) onSecretClicks();
+    }
+}
+
+void FogLogo::blow (juce::Point<float> pos, juce::Time time)
+{
+    const double dt = juce::jlimit (0.004, 0.1, (time - lastTime).inSeconds());
+    const auto v = (pos - lastPos) / (float) dt;
+    lastPos = pos;
+    lastTime = time;
+    if (Accessibility::reduceMotion()) return;   // «Уменьшить движение» — слово просто стоит
+    if (v.getDistanceFromOrigin() < 20.0f) return; // ветер только от движения
+    push (pos, v);
+}
+
+void FogLogo::push (juce::Point<float> pos, juce::Point<float> v)
+{
+    const float R = cell * 5.0f;
+    const float speed = v.getDistanceFromOrigin();
+    const auto wind = v / speed;
+    const float mag = juce::jmin (speed * 0.35f, cell * 70.0f);   // предел ≈ 15 клеток разлёта
+    std::vector<int> hit;
+    for (int i = 0; i < (int) particles.size(); ++i)
+    {
+        auto& p = particles[(size_t) i];
+        const auto c = p.home.getCentre() + p.off;
+        const float d = c.getDistanceFrom (pos);
+        if (d >= R) continue;
+        const float f = (1.0f - d / R) * (1.0f - d / R);
+        const auto away = d > 0.5f ? (c - pos) / d : juce::Point<float> ();
+        auto dir = wind + away * 0.35f + juce::Point<float> (0.0f, -0.25f);   // ветер, немного в сторону и вверх
+        const float len = juce::jmax (0.001f, dir.getDistanceFromOrigin());
+        dir = dir / len;
+        const float ang = (rng.nextFloat() - 0.5f) * 0.4f;                      // ±20% разброс угла
+        dir = { dir.x * std::cos (ang) - dir.y * std::sin (ang), dir.x * std::sin (ang) + dir.y * std::cos (ang) };
+        p.vel += dir * (mag * f * (0.8f + 0.4f * rng.nextFloat()));
+        p.t = 0.0f;
+        p.flight = 0.3f + 0.2f * rng.nextFloat();
+        p.moving = true;
+        hit.push_back (i);
+    }
+    if (hit.empty()) return;
+    const bool anySignal = std::any_of (particles.begin(), particles.end(), [] (const Particle& p) { return p.signal; });
+    if (! anySignal) particles[(size_t) hit[(size_t) rng.nextInt ((int) hit.size())]].signal = true;
+    if (! isTimerRunning()) startTimerHz (60);
+}
+
+void FogLogo::timerCallback()
+{
+    const float dt = 1.0f / 60.0f, w = 9.0f, maxR = cell * 15.0f;
+    bool any = false;
+    for (auto& p : particles)
+    {
+        if (! p.moving) continue;
+        p.t += dt;
+        if (p.t < p.flight)
+            p.vel *= std::exp (-3.5f * dt);                              // полёт по инерции с трением
+        else
+            p.vel += (p.off * (-w * w) - p.vel * (2.0f * w)) * dt;       // пружина без перелёта
+        p.off += p.vel * dt;
+        const float d = p.off.getDistanceFromOrigin();
+        if (d > maxR) p.off = p.off * (maxR / d);
+        if (p.t >= p.flight && d < 0.5f && p.vel.getDistanceFromOrigin() < 8.0f)
+        {
+            p.off = {}; p.vel = {}; p.moving = false; p.signal = false;
+            continue;
+        }
+        any = true;
+    }
+    if (! any) stopTimer();   // все дома — перерисовок больше нет
+    repaint();
+}
+
+void FogLogo::blowForTest (juce::Point<float> from, juce::Point<float> to, int steps)
+{
+    const bool rm = Accessibility::reduceMotion();
+    juce::ignoreUnused (rm);
+    lastPos = from;
+    for (int i = 1; i <= steps; ++i)
+    {
+        const auto p = from + (to - from) * ((float) i / (float) steps);
+        push (p, (p - lastPos) * 60.0f);
+        lastPos = p;
+        timerCallback();
     }
 }
 
@@ -321,14 +494,17 @@ void AboutPage::paint (juce::Graphics& g)
         for (int x = 12; x < getWidth(); x += 16)
             g.fillRect (x, y, 1, 1);
 
-    // большое «Mist»
+    // большое «Mist»: на основной странице его рисует FogLogo, в режиме игры — здесь (уменьшенное)
     g.setColour (Colours::ink);
     const float targetW = gameMode ? 150.0f : 320.0f;
+    if (gameMode)
+    {
     auto f = LnF::pixel (100.0f);
     const float w100 = (float) juce::GlyphArrangement::getStringWidth (f, "Mist");
     f = LnF::pixel (100.0f * targetW / juce::jmax (1.0f, w100));
     g.setFont (f);
     g.drawText ("Mist", bigLogo, juce::Justification::centred);
+    }
 
     // под логотипом — автор
     g.setColour (Colours::ink2);
@@ -362,7 +538,7 @@ void AboutPage::resized()
     {
         bigLogo = { 0.0f, H * 0.33f, W, 140.0f };
         versionLine = { 0.0f, bigLogo.getBottom() + 4.0f, W, 18.0f };
-        logoHit.setBounds (bigLogo.withSizeKeepingCentre (360.0f, bigLogo.getHeight()).toNearestInt());
+        logoHit.setWordArea (bigLogo.withSizeKeepingCentre (360.0f, bigLogo.getHeight()), 320.0f);
         authorLink.setBounds (versionLine.withSizeKeepingCentre (110.0f, 22.0f).toNearestInt());
     }
     else

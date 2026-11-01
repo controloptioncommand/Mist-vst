@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.22)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "macOS architectures")
 
-project(Mist VERSION 2.0.0 LANGUAGES C CXX)
+project(Mist VERSION 2.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -70,11 +70,15 @@ set(MIST_DEFS
 
 target_compile_definitions(Mist PUBLIC ${MIST_DEFS})
 
-# Medeo Pixel (SIL OFL) — логотип и название Mist, встраивается в плагин
+# Шрифты Medeo (SIL OFL): Sans — интерфейс, Mono — числа, Pixel — логотип. Встраиваются в плагин
 juce_add_binary_data(MistFonts
     NAMESPACE MistFonts
     HEADER_NAME BinaryData.h
     SOURCES
+        Resources/Fonts/MedeoSans-Regular.ttf
+        Resources/Fonts/MedeoSans-SemiBold.ttf
+        Resources/Fonts/MedeoMono-Regular.ttf
+        Resources/Fonts/MedeoMono-SemiBold.ttf
         Resources/Fonts/MedeoPixel-Regular.ttf)
 set_target_properties(MistFonts PROPERTIES POSITION_INDEPENDENT_CODE ON)
 

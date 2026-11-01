@@ -96,6 +96,7 @@ public:
     // для тестов
     void setThemeForTest (ThemeId id) { setThemeMode (id == ThemeId::Rubber ? ThemeMode::Rubber : ThemeMode::Oxygen); }
     void setView (int pageIndex, int vizMode, int op) { selectOperator (op); showPage (pageIndex); viz.setMode ((Visualizer::Mode) vizMode); }
+    AboutPage& getAboutForTest() { return about; }
     void showAboutForTest (bool show, bool game) { showAbout (show); if (show) about.showGame (game); }
 
 private:

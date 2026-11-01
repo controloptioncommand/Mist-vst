@@ -81,7 +81,7 @@ PillChoice::PillChoice (APVTS& s, const juce::String& id, const juce::String& ca
 void PillChoice::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat().reduced (0.5f);
-    const float rad = r.getHeight() * 0.5f;
+    const float rad = juce::jmin (r.getHeight() * 0.5f, 8.0f);
     g.setColour (Colours::well);
     g.fillRoundedRectangle (r, rad);
     g.setColour (Colours::outline);
@@ -165,7 +165,7 @@ void IconButton::paintButton (juce::Graphics& g, bool over, bool down)
     if (over || down)
     {
         g.setColour (Colours::ink.withAlpha (down ? 0.10f : 0.05f));
-        g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
+        g.fillRoundedRectangle (r, 8.0f);
     }
     g.setColour (Colours::ink);
     const auto c = r.getCentre();
@@ -201,7 +201,7 @@ void IconButton::paintButton (juce::Graphics& g, bool over, bool down)
         p.lineTo (c.x + 2.5f * d, c.y + 5.0f);
         g.strokePath (p, juce::PathStrokeType (1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
-    if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, r, r.getHeight() * 0.5f);
+    if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, r, 8.0f);
 }
 
 // ===========================================================================
@@ -475,12 +475,12 @@ void MistEditor::paint (juce::Graphics& g)
     g.addTransform (juce::AffineTransform::scale ((float) getWidth() / (float) kBaseW));
 
     // тулбар — стекло
-    LnF::drawGlass (g, toolbarArea.toFloat(), 18.0f);
+    LnF::drawPlate (g, toolbarArea.toFloat(), 12.0f);
     g.setColour (Colours::outline);
     g.drawVerticalLine (logo.getRight() + 8, (float) toolbarArea.getY() + 15, (float) toolbarArea.getBottom() - 15);
 
     // панель оператора — плотная поверхность
-    const float radius = 14.0f;
+    const float radius = 12.0f;
     g.setColour (Colours::surface);
     g.fillRoundedRectangle (settingsArea.toFloat(), radius);
     g.setColour (Colours::outline);

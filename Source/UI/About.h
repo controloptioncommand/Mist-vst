@@ -6,7 +6,7 @@ namespace mist
 // Версия и дата — показываются на странице About
 namespace AboutInfo
 {
-    inline const char* version = "v2";
+    inline const char* version = "v2.1";
     inline const char* repoUrl = "https://github.com/controloptioncommand/Mist-vst";
     inline const char* authorUrl = "https://t.me/nothiingnothingnothing";
     inline const char* date = "1st November 2026";
@@ -46,6 +46,54 @@ private:
     juce::Random rng;
 };
 
+// Большое «Mist» на странице About с эффектом «Туман»: пиксели букв сдувает движением курсора,
+// через ~1 с они возвращаются. В покое рисуется обычный текст — пиксель в пиксель как раньше.
+// Пять быстрых кликов по слову открывают игру.
+class FogLogo : public juce::Component, private juce::Timer
+{
+public:
+    FogLogo();
+    void setWordArea (juce::Rectangle<float> textRectInParent, float targetWidth);
+    std::function<void()> onSecretClicks;
+
+    void paint (juce::Graphics& g) override;
+    void resized() override { build(); }
+    void mouseMove (const juce::MouseEvent& e) override { blow (e.position, e.eventTime); }
+    void mouseDrag (const juce::MouseEvent& e) override { blow (e.position, e.eventTime); }
+    void mouseEnter (const juce::MouseEvent& e) override { lastPos = e.position; lastTime = e.eventTime; }
+    void mouseDown (const juce::MouseEvent& e) override;
+
+    // для тестов
+    int getNumParticles() const { return (int) particles.size(); }
+    bool isAnimating() const { return isTimerRunning(); }
+    void blowForTest (juce::Point<float> from, juce::Point<float> to, int steps);
+    void stepForTest (int frames) { for (int i = 0; i < frames; ++i) timerCallback(); }
+
+private:
+    struct Particle
+    {
+        juce::Rectangle<float> home;
+        juce::Point<float> off, vel;
+        float t = 0, flight = 0.4f;
+        bool moving = false, signal = false;
+    };
+    void build();
+    void blow (juce::Point<float> pos, juce::Time time);
+    void push (juce::Point<float> pos, juce::Point<float> velocity);
+    void timerCallback() override;
+
+    juce::Rectangle<float> textRect;     // где рисуется текст (локально)
+    juce::Rectangle<float> wordBounds;   // контур слова в покое — область кликов
+    float targetW = 320.0f, cell = 6.4f;
+    juce::Font font { juce::FontOptions() };
+    std::vector<Particle> particles;
+    juce::Point<float> lastPos;
+    juce::Time lastTime;
+    juce::uint32 lastClick = 0;
+    int clicks = 0;
+    juce::Random rng;
+};
+
 // Страница About: на всё окно. Логотип, версия/дата, Play → игра.
 class AboutPage : public juce::Component
 {
@@ -55,19 +103,13 @@ public:
     void resized() override;
     void showGame (bool show);
     std::function<void()> onClose;
+    FogLogo& getFogForTest() { return logoHit; }
 
 private:
     struct BackLogo : juce::Button
     {
         BackLogo() : juce::Button ("Mist") { setTitle ("Back to Mist"); }
         void paintButton (juce::Graphics&, bool over, bool down) override;
-    };
-    struct SecretLogo : juce::Component
-    {
-        std::function<void()> onSecretClicks;
-        void mouseDown (const juce::MouseEvent&) override;
-        juce::uint32 lastClick = 0;
-        int clicks = 0;
     };
     // Невидимая кликабельная область поверх текста: внешне ничем не выделена
     struct HiddenLink : juce::Component
@@ -103,7 +145,7 @@ private:
     void drawVersion (juce::Graphics& g, juce::Rectangle<float> r, bool centred = true);
 
     BackLogo back;
-    SecretLogo logoHit;
+    FogLogo logoHit;
     HiddenLink versionLink { "Mist on GitHub", AboutInfo::repoUrl };
     HiddenLink authorLink { "Author on Telegram", AboutInfo::authorUrl };
     CapsuleButton closeGame { "Close game" };

@@ -47,5 +47,5 @@ cmake -B build -DMIST_BUILD_TESTS=ON && cmake --build build --target MistRenderT
 ## Структура
 - `Source/DSP/` — синтез (голоса, операторы, зёрна, LFO, wavetable, детектор высоты, огибающие, фильтр)
 - `Source/Algorithms.cpp` — 32 алгоритма; `Source/Randomizer.cpp` — кубик
-- `Source/UI/` — интерфейс: `LookAndFeel` (темы, шрифты, стекло), `Visualizer`, `OperatorPanel`, `RoutingPanel`, `ModulationPanel`, `About` (страница About и игра)
+- `Source/UI/` — интерфейс: `LookAndFeel` (темы, шрифты Medeo, плашки, ручки), `Visualizer`, `OperatorPanel`, `RoutingPanel`, `ModulationPanel`, `About` (страница About, «Туман», игра)
 - `Tests/RenderTest.cpp` — офлайн-тест; `scripts/` — установка и проверка приватности; `docs/` — картинки README, патчноуты, дизайн
