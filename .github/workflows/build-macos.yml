@@ -11,7 +11,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-15   # Apple Silicon (система сервера сборки; плагин работает на macOS 11+)
+    # Временно Intel-сервер: у GitHub нет свободных macOS arm64-раннеров. Плагин собирается универсальным
+    # (arm64 + x86_64), тесты и валидаторы проверяют x86_64-часть. Вернуть macos-15 (Apple Silicon), когда наладится.
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,7 +36,7 @@ jobs:
           key: juce-src-8.0.10-${{ runner.os }}-${{ github.repository }}
 
       - name: Configure
-        run: cmake -B build -G Xcode -DMIST_BUILD_TESTS=ON
+        run: cmake -B build -G Xcode -DMIST_BUILD_TESTS=ON "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
 
       - name: Build plugin (VST3 + AU)
         run: cmake --build build --config Release --target Mist_VST3 Mist_AU -- -quiet
