@@ -1,15 +1,15 @@
 #include "RoutingPanel.h"
 #include "../Algorithms.h"
 
-namespace loom
+namespace mist
 {
-static float paramValue (LoomProcessor& p, const juce::String& id)
+static float paramValue (MistProcessor& p, const juce::String& id)
 {
     auto* pp = p.apvts.getParameter (id);
     return pp != nullptr ? pp->convertFrom0to1 (pp->getValue()) : 0.0f;
 }
 
-Routing Routing::read (LoomProcessor& p)
+Routing Routing::read (MistProcessor& p)
 {
     Routing r;
     r.algorithm = (int) paramValue (p, "algorithm");
@@ -151,12 +151,12 @@ void AlgorithmDiagram::paint (juce::Graphics& g)
         g.setColour (c);
         g.drawEllipse (p.x - nodeR, p.y - nodeR, nodeR * 2, nodeR * 2, 1.5f);
         g.setColour (r.out[i] > 0 ? juce::Colours::white : Colours::text);
-        g.setFont (LoomLookAndFeel::font (nodeR, true));
+        g.setFont (MistLookAndFeel::mono (nodeR, true));
         g.drawText (juce::String (i + 1), juce::Rectangle<float> (p.x - nodeR, p.y - nodeR, nodeR * 2, nodeR * 2), juce::Justification::centred);
     }
 
     g.setColour (Colours::textDim);
-    g.setFont (LoomLookAndFeel::font (11.0f));
+    g.setFont (MistLookAndFeel::font (11.0f));
     const juce::String name = r.isMatrix ? juce::String ("MATRIX") : "ALG " + juce::String (r.algorithm) + "  " + getAlgorithm (r.algorithm - 1).name;
     g.drawText (name, bounds.reduced (6, 3), juce::Justification::topLeft);
 }
@@ -188,7 +188,7 @@ juce::RangedAudioParameter* MatrixGrid::paramFor (int row, int col) const
 void MatrixGrid::paint (juce::Graphics& g)
 {
     const auto r = Routing::read (proc);
-    g.setFont (LoomLookAndFeel::font (10.0f));
+    g.setFont (MistLookAndFeel::mono (10.0f));
 
     for (int c = 0; c <= kNumOps; ++c)
     {
@@ -289,7 +289,7 @@ void MatrixGrid::mouseDoubleClick (const juce::MouseEvent& e)
 }
 
 // ===========================================================================
-RoutingPanel::RoutingPanel (LoomProcessor& p) : Section ("Routing"), diagram (p), proc (p), grid (p)
+RoutingPanel::RoutingPanel (MistProcessor& p) : Section ("Routing"), diagram (p), proc (p), grid (p)
 {
     algo.attach (proc.apvts, "algorithm");
     addAndMakeVisible (algo);
@@ -300,8 +300,8 @@ RoutingPanel::RoutingPanel (LoomProcessor& p) : Section ("Routing"), diagram (p)
     addAndMakeVisible (grid);
 
     hint.setText ("drag cells: amount  |  dbl-click: on/off  |  shift: fine", juce::dontSendNotification);
-    hint.setFont (LoomLookAndFeel::font (10.0f));
-    hint.setColour (juce::Label::textColourId, Colours::textDim);
+    hint.setFont (MistLookAndFeel::font (10.0f));
+    styleLabel (hint, true);
     addAndMakeVisible (hint);
 
     auto step = [this] (int d)
@@ -367,4 +367,4 @@ void RoutingPanel::resized()
     r.removeFromLeft (8);
     grid.setBounds (r);
 }
-} // namespace loom
+} // namespace mist

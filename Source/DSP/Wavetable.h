@@ -3,7 +3,7 @@
 #include <vector>
 #include <complex>
 
-namespace loom
+namespace mist
 {
 // Band-limited wavetable: несколько кадров (frames), у каждого — mip-уровни,
 // где уровень k содержит гармоники 1 .. (N/2 >> k). Чтение с линейной интерполяцией
@@ -89,4 +89,4 @@ private:
     int numFrames = 0;
     std::vector<float> data;
 };
-} // namespace loom
+} // namespace mist

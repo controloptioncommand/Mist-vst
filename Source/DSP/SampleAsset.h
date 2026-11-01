@@ -3,7 +3,7 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <memory>
 
-namespace loom
+namespace mist
 {
 // Загруженный семпл оператора: моно-аудио, найденный питч, wavetable из него,
 // и сжатая (FLAC) копия для сохранения внутри пресета/проекта.
@@ -59,4 +59,4 @@ private:
 };
 
 float detectPitchMidi (const float* x, int n, double sampleRate);   // -1 если не найден
-} // namespace loom
+} // namespace mist

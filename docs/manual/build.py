@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Генерирует HTML руководства Loom (затем печатается в PDF через Chromium)."""
+"""Генерирует HTML руководства Mist (затем печатается в PDF через Chromium)."""
 import re, base64, pathlib, html
 
 HERE = pathlib.Path(__file__).parent
@@ -190,7 +190,7 @@ gestures = table([
 ], head=("Где", "Как"))
 
 trouble = table([
-    ("Loom нет в Ableton", "Settings → Plug-Ins: включить Use Audio Units и/или VST3 System Folders, нажать Rescan. Если не помогло — ещё раз запустить install-mac.sh."),
+    ("Mist нет в Ableton", "Settings → Plug-Ins: включить Use Audio Units и/или VST3 System Folders, нажать Rescan. Если не помогло — ещё раз запустить install-mac.sh."),
     ("macOS пишет, что плагин повреждён", "Плагин без подписи Apple. install-mac.sh снимает карантин; если ставили вручную — выполнить скрипт."),
     ("Нет звука", "Проверить: несущие (закрашенные кружки на схеме) включены и Depth > 0; Master; не выключен ли оператор точкой в слоте."),
     ("Ноты не замолкают", "Включён Drone — выключить кнопкой внизу или «Drone on» в визуализации."),
@@ -199,7 +199,7 @@ trouble = table([
     ("Перегруз", "Убавить Master или FM Amount. На выходе стоит мягкий ограничитель, он не даёт превысить 0 дБ, но окрашивает звук."),
 ], head=("Проблема", "Решение"))
 
-HTML = f"""<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Loom — руководство</title>
+HTML = f"""<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Mist — руководство</title>
 <style>
 @page {{ size: A4; margin: 16mm 15mm 16mm 15mm; }}
 * {{ box-sizing: border-box; }}
@@ -238,12 +238,12 @@ ol, ul {{ margin: 0 0 3mm; padding-left: 6mm; }} li {{ margin-bottom: 1mm; }}
 <section class="cover">
   <div>
     <div class="dim" style="font-size:10pt;letter-spacing:2pt">РУКОВОДСТВО · VST3 / AU · macOS</div>
-    <h1 style="font-size:48pt;margin-top:6mm">Loom</h1>
+    <h1 style="font-size:48pt;margin-top:6mm">Mist</h1>
     <p class="lead">Синтезатор на частотной (фазовой) модуляции, где источником каждого оператора может быть ваш семпл.
     Шесть операторов, 32 алгоритма и свободная матрица — для дронов, пэдов и саунд-дизайна.</p>
   </div>
   <img src="{img('ui_waves.png')}">
-  <div class="dim">Версия 0.2 · пресеты: ~/Music/Loom/Presets</div>
+  <div class="dim">Версия 0.2 · пресеты: ~/Music/Mist/Presets</div>
 </section>
 
 <h2 style="border:0;margin-top:0">Содержание</h2>
@@ -259,7 +259,7 @@ ol, ul {{ margin: 0 0 3mm; padding-left: 6mm; }} li {{ margin-bottom: 1mm; }}
 Другие не слышны, а «раскачивают» несущие, сдвигая их фазу с огромной скоростью, — это <b>модуляторы</b>. В результате
 появляются новые обертоны: от тёплых до металлических и шумовых. Чем больше уровень модулятора (Depth) и общий
 FM Amount, тем богаче и «грязнее» звук.</p>
-<p>В классическом FM операторы — синусы. В Loom оператор может звучать как ваш семпл тремя способами:</p>
+<p>В классическом FM операторы — синусы. В Mist оператор может звучать как ваш семпл тремя способами:</p>
 <ul>
 <li><b>Sample PM</b> — семпл проигрывается, а модуляторы сдвигают точку чтения в нём, сэмпл за сэмплом. Живые, «грязные» текстуры.</li>
 <li><b>Scrub</b> — из семпла нарезается 64-кадровая волновая таблица по его периоду. Ручка Position прокручивает по ней. Стабильная высота, без алиасинга — для пэдов и чистых тонов.</li>
@@ -269,12 +269,12 @@ FM Amount, тем богаче и «грязнее» звук.</p>
 
 <div style="break-inside:avoid"><h2>2. Установка и обновление</h2>
 <ol>
-<li>Скачайте последнюю сборку (нужен вход в GitHub):<br><span class="mono">github.com/controloptioncommand/loom/releases/latest/download/Loom-macOS.zip</span></li>
-<li>Распакуйте архив двойным кликом — появится папка <b>Loom-macOS</b> в «Загрузках».</li>
+<li>Скачайте последнюю сборку (нужен вход в GitHub):<br><span class="mono">github.com/controloptioncommand/loom/releases/latest/download/Mist-macOS.zip</span></li>
+<li>Распакуйте архив двойным кликом — появится папка <b>Mist-macOS</b> в «Загрузках».</li>
 <li>Откройте Терминал (Cmd + пробел → «Терминал») и выполните:</li>
 </ol>
-<pre>bash ~/Downloads/Loom-macOS/install-mac.sh</pre>
-<p>Скрипт кладёт <b>Loom.vst3</b> и <b>Loom.component</b> в <span class="mono">~/Library/Audio/Plug-Ins</span> и снимает карантин macOS
+<pre>bash ~/Downloads/Mist-macOS/install-mac.sh</pre>
+<p>Скрипт кладёт <b>Mist.vst3</b> и <b>Mist.component</b> в <span class="mono">~/Library/Audio/Plug-Ins</span> и снимает карантин macOS
 (плагин не подписан сертификатом Apple). В Ableton: перезапуск, затем при необходимости Settings → Plug-Ins → Rescan.
 Плагин работает на Apple Silicon, macOS 11 и новее.</p>
 <div class="box"><b>Обновление.</b> Каждое изменение автоматически собирается и выкладывается по той же ссылке. Чтобы обновиться — повторите шаги 1–3.
@@ -311,7 +311,7 @@ Sine → Sine+Oct → Tri → Square → Saw → Pulse 25% → Pulse 10% → For
 <h2>5. Семплы</h2>
 <ul>
 <li>Форматы: WAV, AIFF, FLAC, MP3, OGG, CAF, M4A. Стерео сводится в моно. Максимум 60 секунд.</li>
-<li>При загрузке Loom ищет высоту тона (30 Гц – 2 кГц) и ставит <b>Root</b>. Если семпл шумовой и высота не найдена, Root остаётся C3.</li>
+<li>При загрузке Mist ищет высоту тона (30 Гц – 2 кГц) и ставит <b>Root</b>. Если семпл шумовой и высота не найдена, Root остаётся C3.</li>
 <li>Семпл нормализуется и сохраняется <b>внутри</b> пресета и проекта Ableton (FLAC). Исходный файл можно удалить.</li>
 <li>Заменить семпл можно, просто перетащив новый на тот же слот, даже пока нота звучит.</li>
 </ul>
@@ -355,13 +355,13 @@ Rate — от 0.01 до 40 Гц. С включённым <b>Sync</b> скоро�
 <p><b>Oversampling.</b> Синтез на повышенной частоте (1x / 2x / 4x). Сильная FM рождает обертоны выше слышимого диапазона,
 которые «заворачиваются» в неприятные призвуки; оверсемплинг это убирает. Каждый шаг примерно удваивает нагрузку.
 По умолчанию 2x.</p>
-<p><b>Voices / CPU.</b> Сколько голосов звучит из 8 и какая доля времени аудиоблока уходит на Loom.</p>
+<p><b>Voices / CPU.</b> Сколько голосов звучит из 8 и какая доля времени аудиоблока уходит на Mist.</p>
 
 <h2>13. Пресеты</h2>
 <ul>
 <li>Браузер — в шапке: ‹ › листают, клик по имени — список по папкам.</li>
-<li>Сохранить: иконка настроек → <b>Save preset…</b>, указать имя и папку. Файлы <span class="mono">*.loom</span> лежат в
-<span class="mono">~/Music/Loom/Presets</span>; семплы хранятся внутри файла, поэтому пресетом можно поделиться одним файлом.</li>
+<li>Сохранить: иконка настроек → <b>Save preset…</b>, указать имя и папку. Файлы <span class="mono">*.mist</span> лежат в
+<span class="mono">~/Music/Mist/Presets</span>; семплы хранятся внутри файла, поэтому пресетом можно поделиться одним файлом.</li>
 <li>Состояние со всеми семплами также сохраняется в проекте Ableton.</li>
 </ul>
 <h3>Заводские пресеты</h3>{factory}
@@ -393,5 +393,5 @@ Rate — от 0.01 до 40 Гц. С включённым <b>Sync</b> скоро�
 подблоки модуляции 32 сэмпла, wavetable 2048 точек × 64 кадра с band-limited mip-уровнями, оверсемплинг на полуполосных IIR-фильтрах.</p>
 </body></html>"""
 
-(HERE / "Loom-Manual.html").write_text(HTML, encoding="utf-8")
+(HERE / "Mist-Manual.html").write_text(HTML, encoding="utf-8")
 print("ok", len(HTML))

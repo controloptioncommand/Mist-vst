@@ -1,33 +1,35 @@
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <array>
 
-namespace loom
+namespace mist
 {
 // Все цвета интерфейса в одном месте
 inline juce::String midDot() { return juce::String::fromUTF8 ("  \xc2\xb7  "); }
 
+// Цвета текущей темы. Меняются целиком через applyTheme() — все компоненты читают их при отрисовке.
 namespace Colours
 {
-    const juce::Colour bg        { 0xfff2f2f4 };   // фон окна
-    const juce::Colour panel     { 0xffffffff };   // карточки
-    const juce::Colour panelHi   { 0xfff5f5f7 };   // вторичные поверхности, кнопки
-    const juce::Colour outline   { 0xffe3e3e8 };
-    const juce::Colour track     { 0xffe6e6eb };   // дорожка ручек
-    const juce::Colour text      { 0xff1c1c1e };
-    const juce::Colour textDim   { 0xff8e8e93 };
-    const juce::Colour accent    { 0xff1e88ff };   // синий — основной
-    const juce::Colour accent2   { 0xff1e88ff };   // модуляция/фильтр — тот же синий
-    const juce::Colour good      { 0xff34c759 };   // зелёный (meter, drone)
-    const juce::Colour danger    { 0xffe5484d };
-    const juce::Colour vizBg     { 0xff0d0d12 };   // тёмные режимы визуализации
-
+    inline juce::Colour bg, panel, panelHi, outline, track, text, textDim, accent, accent2, good, danger, vizBg;
+    inline juce::Colour opColours[6];
     juce::Colour forOperator (int op);
 }
 
-class LoomLookAndFeel : public juce::LookAndFeel_V4
+enum class ThemeId { Light = 0, Dark = 1 };
+struct Theme
+{
+    juce::Colour bg, panel, panelHi, outline, track, text, textDim, accent, good, danger, vizBg;
+    std::array<juce::Colour, 6> ops;
+    float shadowAlpha;
+};
+const Theme& getTheme (ThemeId id);
+void applyTheme (ThemeId id);       // переписывает Colours::*
+ThemeId currentTheme();
+
+class MistLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
-    LoomLookAndFeel();
+    MistLookAndFeel();
 
     void drawRotarySlider (juce::Graphics&, int x, int y, int w, int h, float pos, float start, float end, juce::Slider&) override;
     void drawLinearSlider (juce::Graphics&, int x, int y, int w, int h, float pos, float minPos, float maxPos,
@@ -45,7 +47,12 @@ public:
     juce::Label* createSliderTextBox (juce::Slider&) override;
     void drawLabel (juce::Graphics&, juce::Label&) override;
 
+    // Шрифты: Medeo Sans — интерфейс, Medeo Mono — цифры/значения, Medeo Pixel — логотип
     static juce::Font font (float size, bool bold = false);
+    static juce::Font mono (float size, bool medium = false);
+    static juce::Font pixel (float size);
+    juce::Typeface::Ptr getTypefaceForFont (const juce::Font&) override;
+    void refreshColours();   // после applyTheme()
     static void drawSwitch (juce::Graphics&, juce::Rectangle<float> r, bool on, juce::Colour onColour);
 };
-} // namespace loom
+} // namespace mist

@@ -3,4 +3,4 @@ cmake-build-*/
 .DS_Store
 *.user
 /dist/
-Loom-macOS.zip
+Mist-macOS.zip

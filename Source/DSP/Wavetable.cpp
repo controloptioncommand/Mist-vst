@@ -1,6 +1,6 @@
 #include "Wavetable.h"
 
-namespace loom
+namespace mist
 {
 void Wavetable::buildFromSpectra (const std::vector<std::vector<std::complex<float>>>& spectra, bool normalisePerFrame)
 {
@@ -129,4 +129,4 @@ const Wavetable& Wavetable::getBasic()
     }();
     return table;
 }
-} // namespace loom
+} // namespace mist

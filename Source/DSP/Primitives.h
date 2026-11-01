@@ -2,7 +2,7 @@
 #include <juce_core/juce_core.h>
 #include <cmath>
 
-namespace loom
+namespace mist
 {
 // ---------------------------------------------------------------------------
 // Коэффициенты огибающей — считаются один раз на блок и общие для всех голосов
@@ -149,4 +149,4 @@ inline float softClip (float x) noexcept
     const float x2 = x * x;
     return x * (27.0f + x2) / (27.0f + 9.0f * x2);
 }
-} // namespace loom
+} // namespace mist

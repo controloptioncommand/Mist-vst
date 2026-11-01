@@ -1,21 +1,21 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 
-namespace loom
+namespace mist
 {
-class LoomProcessor;
+class MistProcessor;
 
-// Пресеты: файлы *.loom (XML, семплы внутри в FLAC/base64) в ~/Music/Loom/Presets,
+// Пресеты: файлы *.mist (XML, семплы внутри в FLAC/base64) в ~/Music/Mist/Presets,
 // плюс заводские пресеты, описанные в коде.
 class PresetManager
 {
 public:
-    explicit PresetManager (LoomProcessor& p);
+    explicit PresetManager (MistProcessor& p);
 
     struct Entry { juce::String name; juce::String category; juce::File file; int factoryIndex = -1; };
 
     static juce::File getPresetFolder();
-    static constexpr const char* kExtension = ".loom";
+    static constexpr const char* kExtension = ".mist";
 
     void refresh();
     const juce::Array<Entry>& getEntries() const { return entries; }
@@ -32,9 +32,9 @@ public:
     int getCurrentIndex() const { return currentIndex; }
 
 private:
-    LoomProcessor& proc;
+    MistProcessor& proc;
     juce::Array<Entry> entries;
     juce::String currentName { "Init" };
     int currentIndex = -1;
 };
-} // namespace loom
+} // namespace mist

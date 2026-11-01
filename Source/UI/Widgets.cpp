@@ -1,13 +1,13 @@
 #include "Widgets.h"
 
-namespace loom
+namespace mist
 {
 ParamKnob::ParamKnob (const juce::String& text, juce::Colour accent)
 {
     slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     slider.setRotaryParameters (juce::degreesToRadians (225.0f), juce::degreesToRadians (495.0f), true);
-    slider.getProperties().set ("accent", accent.toString());
+    slider.getProperties().set ("accent", accent == Colours::accent ? juce::String ("accent") : accent.toString());
     slider.setDoubleClickReturnValue (true, 0.0);
     slider.setMouseDragSensitivity (220);
     slider.onValueChange = [this] { updateValue(); };
@@ -15,14 +15,14 @@ ParamKnob::ParamKnob (const juce::String& text, juce::Colour accent)
 
     label.setText (text, juce::dontSendNotification);
     label.setJustificationType (juce::Justification::centred);
-    label.setFont (LoomLookAndFeel::font (11.5f, true));
-    label.setColour (juce::Label::textColourId, Colours::text);
+    label.setFont (MistLookAndFeel::font (11.5f, true));
+    styleLabel (label, false);
     label.setInterceptsMouseClicks (false, false);
     addAndMakeVisible (label);
 
     value.setJustificationType (juce::Justification::centred);
-    value.setFont (LoomLookAndFeel::font (10.5f));
-    value.setColour (juce::Label::textColourId, Colours::textDim);
+    value.setFont (MistLookAndFeel::mono (10.5f));
+    styleLabel (value, true);
     value.setInterceptsMouseClicks (false, false);
     addAndMakeVisible (value);
 }
@@ -62,8 +62,8 @@ ParamChoice::ParamChoice (const juce::String& text)
     if (text.isNotEmpty())
     {
         label.setText (text, juce::dontSendNotification);
-        label.setFont (LoomLookAndFeel::font (11.0f, true));
-        label.setColour (juce::Label::textColourId, Colours::textDim);
+        label.setFont (MistLookAndFeel::font (11.0f, true));
+        styleLabel (label, true);
         label.setJustificationType (juce::Justification::centredLeft);
         addAndMakeVisible (label);
     }
@@ -105,8 +105,23 @@ void Section::paint (juce::Graphics& g)
     if (flat) return;
     drawCard (g, getLocalBounds().toFloat(), 10.0f, false);
     g.setColour (Colours::text);
-    g.setFont (LoomLookAndFeel::font (12.5f, true));
+    g.setFont (MistLookAndFeel::font (12.5f, true));
     g.drawText (title, juce::Rectangle<int> (12, 7, getWidth() - 24, 18), juce::Justification::centredLeft);
+}
+
+void styleLabel (juce::Label& l, bool dim)
+{
+    l.getProperties().set ("dim", dim);
+    l.setColour (juce::Label::textColourId, dim ? Colours::textDim : Colours::text);
+}
+
+void restyleTree (juce::Component& root)
+{
+    if (auto* l = dynamic_cast<juce::Label*> (&root))
+        if (l->getProperties().contains ("dim"))
+            l->setColour (juce::Label::textColourId, (bool) l->getProperties()["dim"] ? Colours::textDim : Colours::text);
+    for (auto* c : root.getChildren()) restyleTree (*c);
+    root.repaint();
 }
 
 void layoutRow (juce::Rectangle<int> area, std::initializer_list<juce::Component*> items, int gap)
@@ -186,4 +201,4 @@ void EnvelopeView::paint (juce::Graphics& g)
     g.setColour (colour);
     g.strokePath (p, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 }
-} // namespace loom
+} // namespace mist

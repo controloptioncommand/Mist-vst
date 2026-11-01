@@ -1,7 +1,7 @@
 #include "Algorithms.h"
 #include <vector>
 
-namespace loom
+namespace mist
 {
 namespace
 {
@@ -75,4 +75,4 @@ const Algorithm& getAlgorithm (int index)
     static const std::vector<Algorithm> all = buildAll();
     return all[(size_t) juce::jlimit (0, kNumAlgorithms - 1, index)];
 }
-} // namespace loom
+} // namespace mist

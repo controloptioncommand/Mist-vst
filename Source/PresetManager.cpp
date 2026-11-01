@@ -2,13 +2,13 @@
 #include "PluginProcessor.h"
 #include "FactoryPresets.h"
 
-namespace loom
+namespace mist
 {
-PresetManager::PresetManager (LoomProcessor& p) : proc (p) {}
+PresetManager::PresetManager (MistProcessor& p) : proc (p) {}
 
 juce::File PresetManager::getPresetFolder()
 {
-    return juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("Loom").getChildFile ("Presets");
+    return juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("Mist").getChildFile ("Presets");
 }
 
 void PresetManager::refresh()
@@ -111,4 +111,4 @@ void PresetManager::initPatch()
     currentName = "Init";
     currentIndex = -1;
 }
-} // namespace loom
+} // namespace mist

@@ -4,12 +4,12 @@
 #include "PluginEditor.h"
 #include "FactoryPresets.h"
 
-using namespace loom;
+using namespace mist;
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (! (cond)) { ++failures; std::cout << "  FAIL: " << msg << "\n"; } } while (0)
 
-static void setParam (LoomProcessor& p, const juce::String& id, float v)
+static void setParam (MistProcessor& p, const juce::String& id, float v)
 {
     auto* pp = p.apvts.getParameter (id);
     if (pp == nullptr) { std::cout << "  unknown param " << id << "\n"; ++failures; return; }
@@ -18,7 +18,7 @@ static void setParam (LoomProcessor& p, const juce::String& id, float v)
 
 struct Stats { float peak = 0; double rms = 0; bool finite = true; double realtimeFactor = 0; };
 
-static Stats render (LoomProcessor& p, const std::vector<int>& notes, double holdSec, double tailSec,
+static Stats render (MistProcessor& p, const std::vector<int>& notes, double holdSec, double tailSec,
                      const juce::File& out, double sr = 48000.0, int block = 512)
 {
     p.prepareToPlay (sr, block);
@@ -109,7 +109,7 @@ int main (int argc, char** argv)
     const juce::File outDir = argc > 1 ? juce::File (juce::String (argv[1])) : juce::File::getCurrentWorkingDirectory().getChildFile ("render");
     outDir.createDirectory();
 
-    auto proc = std::make_unique<LoomProcessor>();
+    auto proc = std::make_unique<MistProcessor>();
     auto& p = *proc;
 
     std::cout << "== Factory presets\n";
@@ -206,7 +206,7 @@ int main (int argc, char** argv)
         juce::MemoryBlock state;
         p.getStateInformation (state);
         std::cout << "  state size " << (int) state.getSize() << " bytes\n";
-        auto p2 = std::make_unique<LoomProcessor>();
+        auto p2 = std::make_unique<MistProcessor>();
         p2->setStateInformation (state.getData(), (int) state.getSize());
         auto a2 = p2->getSample (0);
         CHECK (a2 != nullptr && a2->length == asset->length, "sample not restored from state");
@@ -216,7 +216,7 @@ int main (int argc, char** argv)
         // пресет-файл
         CHECK (p.presets.save ("RenderTest Preset", "Tests"), "preset save failed");
         p.presets.initPatch();
-        auto f = PresetManager::getPresetFolder().getChildFile ("Tests").getChildFile ("RenderTest Preset.loom");
+        auto f = PresetManager::getPresetFolder().getChildFile ("Tests").getChildFile ("RenderTest Preset.mist");
         CHECK (p.presets.loadFile (f), "preset load failed");
         CHECK (p.getSample (0) != nullptr, "preset did not restore sample");
         f.getParentDirectory().deleteRecursively();
@@ -232,8 +232,8 @@ int main (int argc, char** argv)
         setParam (p, "drone", 1.0f);
         setParam (p, opId (2, "mode"), (float) OpModeSample);
         std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
-        auto* le = dynamic_cast<LoomEditor*> (ed.get());
-        ed->setSize (LoomEditor::kBaseW, LoomEditor::kBaseH);
+        auto* le = dynamic_cast<MistEditor*> (ed.get());
+        ed->setSize (MistEditor::kBaseW, MistEditor::kBaseH);
         p.prepareToPlay (48000.0, 512);
 
         struct Shot { const char* name; int page, viz, op; };
@@ -260,6 +260,19 @@ int main (int argc, char** argv)
             juce::PNGImageFormat().writeImageToStream (img, fos);
             std::cout << "  wrote " << pngFile.getFullPathName() << "\n";
         }
+        // тёмная тема
+        le->setThemeForTest (ThemeId::Dark);
+        le->setView (0, 0, 2);
+        {
+            juce::AudioBuffer<float> buf (2, 512);
+            for (int blk = 0; blk < 60; ++blk) { juce::MidiBuffer midi; p.processBlock (buf, midi); juce::MessageManager::getInstance()->runDispatchLoopUntil (11); }
+            auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+            auto pngFile = outDir.getChildFile ("ui_dark.png");
+            pngFile.deleteFile();
+            juce::FileOutputStream fos (pngFile);
+            juce::PNGImageFormat().writeImageToStream (img, fos);
+        }
+        le->setThemeForTest (ThemeId::Light);
         CHECK (p.activeVoices.load() > 0, "drone did not hold notes");
         setParam (p, "drone", 0.0f);
         ed.reset();

@@ -4,7 +4,7 @@
 #include "LookAndFeel.h"
 #include <deque>
 
-namespace loom
+namespace mist
 {
 // Визуализация результата. Три режима:
 //  Waves    — «стопка» осциллограмм (как в макете), свежая — синяя, спереди
@@ -74,4 +74,4 @@ private:
 
     juce::Rectangle<int> pillWaves, pillSpectrum, pillScope, pillDrone;
 };
-} // namespace loom
+} // namespace mist

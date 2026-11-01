@@ -1,7 +1,7 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 
-namespace loom
+namespace mist
 {
 constexpr int kNumOps        = 6;
 constexpr int kNumVoices     = 8;
@@ -48,4 +48,4 @@ juce::StringArray algorithmChoiceNames();   // "Matrix", "1 Stack", ...
 float coarseToRatio (int coarse);           // 0 -> 0.5, 1..32 -> n
 
 juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-} // namespace loom
+} // namespace mist

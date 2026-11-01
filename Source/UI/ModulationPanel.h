@@ -2,12 +2,12 @@
 #include "Widgets.h"
 #include "../PluginProcessor.h"
 
-namespace loom
+namespace mist
 {
 class FilterPanel : public Section
 {
 public:
-    explicit FilterPanel (LoomProcessor& p);
+    explicit FilterPanel (MistProcessor& p);
     void resized() override;
 
 private:
@@ -21,13 +21,13 @@ private:
 class LfoPanel : public Section
 {
 public:
-    LfoPanel (LoomProcessor& p, int index);
+    LfoPanel (MistProcessor& p, int index);
     void resized() override;
     void refresh();
     void paintOverChildren (juce::Graphics& g) override;
 
 private:
-    LoomProcessor& proc;
+    MistProcessor& proc;
     int index;
     ParamChoice shape { "Shape" }, div { "Division" };
     ParamToggle sync { "Sync" };
@@ -39,7 +39,7 @@ private:
 class ModMatrixPanel : public Section
 {
 public:
-    explicit ModMatrixPanel (LoomProcessor& p);
+    explicit ModMatrixPanel (MistProcessor& p);
     void resized() override;
 
 private:
@@ -53,14 +53,14 @@ private:
     };
     std::array<Row, kNumModSlots> rows;
 };
-} // namespace loom
+} // namespace mist
 
-namespace loom
+namespace mist
 {
 class VoicePage : public juce::Component
 {
 public:
-    explicit VoicePage (LoomProcessor& p);
+    explicit VoicePage (MistProcessor& p);
     void resized() override;
 
 private:
@@ -68,4 +68,4 @@ private:
     ParamKnob glide { "Glide" }, bend { "Bend" }, uni { "Unison" }, uniDetune { "Detune" }, uniSpread { "Spread" },
               fm { "FM Amount" }, master { "Master" };
 };
-} // namespace loom
+} // namespace mist

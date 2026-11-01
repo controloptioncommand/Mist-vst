@@ -1,7 +1,7 @@
 #include "Params.h"
 #include "Algorithms.h"
 
-namespace loom
+namespace mist
 {
 using APF  = juce::AudioParameterFloat;
 using API  = juce::AudioParameterInt;
@@ -231,4 +231,4 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
 
     return layout;
 }
-} // namespace loom
+} // namespace mist

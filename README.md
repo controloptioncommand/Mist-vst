@@ -1,4 +1,4 @@
-# Loom — sample-based FM synth
+# Mist — sample-based FM synth
 
 Личный VST3/AU-инструмент: 6 операторов, фазовая модуляция, где источником каждого оператора может быть семпл.
 
@@ -14,20 +14,20 @@
 - Фильтр: LP12, LP24, BP, HP, Notch, с drive, keytrack и модуляционной огибающей.
 - 2 LFO: 7 форм, синхронизация с темпом и транспортом.
 - Mod Matrix на 8 слотов. Источники: LFO, Mod Env, Velocity, Key, Mod Wheel, Aftertouch, Random. Назначения: глобальные параметры, а также Level / Pitch / Scan / Feedback каждого оператора.
-- Пресеты (`~/Music/Loom/Presets/*.loom`) хранят семплы внутри файла (FLAC). Проект DAW тоже хранит семплы внутри.
+- Пресеты (`~/Music/Mist/Presets/*.mist`) хранят семплы внутри файла (FLAC). Проект DAW тоже хранит семплы внутри.
 - Окно масштабируется от 50% до 200%.
 
 ## Руководство
 
-Подробное руководство: [docs/Loom-Manual.pdf](docs/Loom-Manual.pdf). Оно же лежит в архиве релиза.
+Подробное руководство: [docs/Mist-Manual.pdf](docs/Mist-Manual.pdf). Оно же лежит в архиве релиза.
 Исходник: `docs/manual/build.py` → `node docs/manual/print.js`.
 
 ## Установка на macOS
 
-1. Откройте вкладку **Actions** репозитория, выберите последний успешный запуск **Build macOS** и скачайте артефакт `Loom-macOS`.
+1. Откройте вкладку **Actions** репозитория, выберите последний успешный запуск **Build macOS** и скачайте артефакт `Mist-macOS`.
 2. Распакуйте архив и выполните в Терминале:
    ```bash
-   bash ~/Downloads/Loom-macOS/install-mac.sh
+   bash ~/Downloads/Mist-macOS/install-mac.sh
    ```
 3. В Ableton Live: **Settings → Plug-Ins → Rescan**.
 
@@ -35,14 +35,14 @@
 
 ```bash
 cmake -B build -G Xcode
-cmake --build build --config Release --target Loom_VST3 Loom_AU
+cmake --build build --config Release --target Mist_VST3 Mist_AU
 ```
 
 Офлайн-тест (рендер пресетов в WAV, проверка NaN, перегрузки и скорости):
 
 ```bash
-cmake -B build -DLOOM_BUILD_TESTS=ON && cmake --build build --target LoomRenderTest
-./build/LoomRenderTest_artefacts/Release/LoomRenderTest ./render
+cmake -B build -DMIST_BUILD_TESTS=ON && cmake --build build --target MistRenderTest
+./build/MistRenderTest_artefacts/Release/MistRenderTest ./render
 ```
 
 ## Структура

@@ -1,20 +1,20 @@
 #include "OperatorPanel.h"
 #include "RoutingPanel.h"
 
-namespace loom
+namespace mist
 {
 static bool isAudioFile (const juce::String& path)
 {
     return juce::File (path).hasFileExtension ("wav;aif;aiff;flac;mp3;ogg;caf;m4a");
 }
 
-static float getParam (LoomProcessor& p, const juce::String& id)
+static float getParam (MistProcessor& p, const juce::String& id)
 {
     auto* pp = p.apvts.getParameter (id);
     return pp != nullptr ? pp->convertFrom0to1 (pp->getValue()) : 0.0f;
 }
 
-juce::String operatorRole (LoomProcessor& p, int op)
+juce::String operatorRole (MistProcessor& p, int op)
 {
     const auto r = Routing::read (p);
     if (! r.on[op]) return "Off";
@@ -44,7 +44,7 @@ juce::String modeDescription (int mode)
 }
 
 // ===========================================================================
-SampleSlot::SampleSlot (LoomProcessor& p, int o, std::function<void (int)> sel)
+SampleSlot::SampleSlot (MistProcessor& p, int o, std::function<void (int)> sel)
     : proc (p), op (o), onSelect (std::move (sel))
 {
     reverse.setClickingTogglesState (true);
@@ -81,10 +81,10 @@ void SampleSlot::paint (juce::Graphics& g)
     g.setColour (isOn ? col : Colours::textDim.withAlpha (0.5f));
     g.fillEllipse (powerArea.toFloat().withSizeKeepingCentre (8, 8));
     g.setColour (isOn ? Colours::text : Colours::textDim);
-    g.setFont (LoomLookAndFeel::font (12.0f, true));
+    g.setFont (MistLookAndFeel::font (12.0f, true));
     const juce::String title = "Op " + juce::String (op + 1) + midDot() + cachedRole;
     g.drawText (title, top.removeFromLeft (130), juce::Justification::centredLeft);
-    g.setFont (LoomLookAndFeel::font (11.0f));
+    g.setFont (MistLookAndFeel::mono (10.5f));
     g.setColour (Colours::textDim);
     const int mode = (int) param ("mode");
     g.drawText (asset ? asset->name : juce::String ("no sample"), top, juce::Justification::centredRight, true);
@@ -137,13 +137,13 @@ void SampleSlot::paint (juce::Graphics& g)
         g.setColour (waveCol.withAlpha (0.35f));
         g.strokePath (p, juce::PathStrokeType (1.2f));
         g.setColour (Colours::textDim);
-        g.setFont (LoomLookAndFeel::font (10.5f));
+        g.setFont (MistLookAndFeel::font (10.5f));
         g.drawText (dragOver ? "Release to load" : "Drop a sample", wa, juce::Justification::centred);
     }
 
     // низ: Start / Length
     g.setColour (Colours::textDim);
-    g.setFont (LoomLookAndFeel::font (10.5f));
+    g.setFont (MistLookAndFeel::mono (10.0f));
     juce::String info;
     if (asset)
     {
@@ -317,7 +317,7 @@ void WaveView::paint (juce::Graphics& g)
     }
 
     g.setColour (Colours::textDim);
-    g.setFont (LoomLookAndFeel::font (10.0f));
+    g.setFont (MistLookAndFeel::font (10.0f));
     const juce::String hint = asset == nullptr ? "built-in table" + midDot() + "drop a sample on the slot"
                             : mode == OpModeSample ? "drag markers: start / loop" : mode == OpModeGrain ? "drag: position" : "";
     g.drawText (hint, r.reduced (8, 4), juce::Justification::bottomRight);
@@ -362,7 +362,7 @@ void WaveView::mouseUp (const juce::MouseEvent&)
 }
 
 // ===========================================================================
-OperatorPage::OperatorPage (LoomProcessor& p) : proc (p), wave (p)
+OperatorPage::OperatorPage (MistProcessor& p) : proc (p), wave (p)
 {
     for (auto* k : allKnobs()) addChildComponent (k);
     for (juce::Component* c : std::initializer_list<juce::Component*> { &on, &fixed, &keytrack, &loopMode })
@@ -393,7 +393,7 @@ void OperatorPage::setOperator (int newOp)
     fixedHz.attach (s, opId (op, "fixedHz"));    out.attach (s, opId (op, "out"));
     on.attach (s, opId (op, "on"));              fixed.attach (s, opId (op, "fixed"));
     keytrack.attach (s, opId (op, "keytrack"));  loopMode.attach (s, opId (op, "loopMode"));
-    for (auto* k : allKnobs()) k->slider.getProperties().set ("accent", Colours::accent.toString());
+    for (auto* k : allKnobs()) k->slider.getProperties().set ("accent", "accent");
     wave.setOperator (op);
     shownMode = -1;
     refresh();
@@ -465,7 +465,7 @@ void OperatorPage::resized()
 }
 
 // ===========================================================================
-EnvelopePage::EnvelopePage (LoomProcessor& p) : proc (p)
+EnvelopePage::EnvelopePage (MistProcessor& p) : proc (p)
 {
     for (auto* k : { &delay, &attack, &hold, &decay, &sustain, &release }) addAndMakeVisible (k);
     addAndMakeVisible (view);
@@ -496,4 +496,4 @@ void EnvelopePage::resized()
     r.removeFromTop (8);
     view.setBounds (r);
 }
-} // namespace loom
+} // namespace mist

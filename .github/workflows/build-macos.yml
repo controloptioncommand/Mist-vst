@@ -22,59 +22,59 @@ jobs:
           key: juce-8.0.10-${{ runner.os }}
 
       - name: Configure
-        run: cmake -B build -G Xcode -DLOOM_BUILD_TESTS=ON
+        run: cmake -B build -G Xcode -DMIST_BUILD_TESTS=ON
 
       - name: Build plugin (VST3 + AU)
-        run: cmake --build build --config Release --target Loom_VST3 Loom_AU -- -quiet
+        run: cmake --build build --config Release --target Mist_VST3 Mist_AU -- -quiet
 
       - name: Build and run render test
         run: |
-          cmake --build build --config Release --target LoomRenderTest -- -quiet
-          ./build/LoomRenderTest_artefacts/Release/LoomRenderTest "$RUNNER_TEMP/render"
+          cmake --build build --config Release --target MistRenderTest -- -quiet
+          ./build/MistRenderTest_artefacts/Release/MistRenderTest "$RUNNER_TEMP/render"
 
       - name: Ad-hoc sign
         run: |
-          codesign --force --deep -s - build/Loom_artefacts/Release/VST3/Loom.vst3
-          codesign --force --deep -s - build/Loom_artefacts/Release/AU/Loom.component
+          codesign --force --deep -s - build/Mist_artefacts/Release/VST3/Mist.vst3
+          codesign --force --deep -s - build/Mist_artefacts/Release/AU/Mist.component
 
       - name: Validate with pluginval
         run: |
           curl -sSL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_macOS.zip
           unzip -q pluginval.zip
           ./pluginval.app/Contents/MacOS/pluginval --strictness-level 8 --validate-in-process \
-            --timeout-ms 600000 build/Loom_artefacts/Release/VST3/Loom.vst3
+            --timeout-ms 600000 build/Mist_artefacts/Release/VST3/Mist.vst3
 
       - name: Validate AU
         run: |
           mkdir -p ~/Library/Audio/Plug-Ins/Components
-          cp -R build/Loom_artefacts/Release/AU/Loom.component ~/Library/Audio/Plug-Ins/Components/
+          cp -R build/Mist_artefacts/Release/AU/Mist.component ~/Library/Audio/Plug-Ins/Components/
           killall -9 AudioComponentRegistrar || true
-          auval -v aumu Loom Prsn
+          auval -v aumu Mist Prsn
 
       - name: Package
         run: |
           mkdir -p dist
-          cp -R build/Loom_artefacts/Release/VST3/Loom.vst3 dist/
-          cp -R build/Loom_artefacts/Release/AU/Loom.component dist/
+          cp -R build/Mist_artefacts/Release/VST3/Mist.vst3 dist/
+          cp -R build/Mist_artefacts/Release/AU/Mist.component dist/
           cp scripts/install-mac.sh dist/
-          cp docs/Loom-Manual.pdf dist/
+          cp docs/Mist-Manual.pdf dist/
           cp "$RUNNER_TEMP/render"/*.wav dist/ 2>/dev/null || true
-          cd dist && zip -qry ../Loom-macOS.zip .
+          cd dist && zip -qry ../Mist-macOS.zip .
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Loom-macOS
-          path: Loom-macOS.zip
+          name: Mist-macOS
+          path: Mist-macOS.zip
 
       # Публикация: постоянная ссылка
-      # https://github.com/controloptioncommand/loom/releases/latest/download/Loom-macOS.zip
+      # https://github.com/controloptioncommand/loom/releases/latest/download/Mist-macOS.zip
       - name: Publish release
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="build-${{ github.run_number }}"
-          gh release create "$VERSION" Loom-macOS.zip \
-            --title "Loom ($VERSION)" \
-            --notes "Скачайте Loom-macOS.zip, распакуйте и выполните в Терминале: bash ~/Downloads/Loom-macOS/install-mac.sh" \
+          gh release create "$VERSION" Mist-macOS.zip \
+            --title "Mist ($VERSION)" \
+            --notes "Скачайте Mist-macOS.zip, распакуйте и выполните в Терминале: bash ~/Downloads/Mist-macOS/install-mac.sh" \
             --latest

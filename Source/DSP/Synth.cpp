@@ -1,6 +1,6 @@
 #include "Synth.h"
 
-namespace loom
+namespace mist
 {
 // глубина фазовой модуляции (в циклах) при Level=100% и FM Amount=100%
 static constexpr float kModScale = 1.5f;
@@ -772,4 +772,4 @@ void Synth::render (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi, co
     if (R == L)   // моно-выход: среднее
         juce::FloatVectorOperations::multiply (L, 0.5f, numSamples);
 }
-} // namespace loom
+} // namespace mist

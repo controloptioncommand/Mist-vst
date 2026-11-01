@@ -5,7 +5,7 @@
 #include <array>
 #include <vector>
 
-namespace loom
+namespace mist
 {
 // ---------------------------------------------------------------------------
 // Снимок параметров на блок (читается из APVTS в processBlock)
@@ -202,4 +202,4 @@ private:
     bool keyDown[128] {};
     bool lastDrone = false;
 };
-} // namespace loom
+} // namespace mist

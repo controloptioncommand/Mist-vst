@@ -1,6 +1,6 @@
 #include "PluginEditor.h"
 
-namespace loom
+namespace mist
 {
 // ===========================================================================
 void Segmented::paint (juce::Graphics& g)
@@ -23,7 +23,7 @@ void Segmented::paint (juce::Graphics& g)
             g.fillPath (p);
         }
         g.setColour (sel ? Colours::text : Colours::textDim);
-        g.setFont (LoomLookAndFeel::font (12.0f, sel));
+        g.setFont (MistLookAndFeel::font (12.0f, sel));
         g.drawText (items[i].text, cell, juce::Justification::centred);
     }
 }
@@ -53,12 +53,12 @@ void PillChoice::paint (juce::Graphics& g)
     g.setColour (Colours::outline);
     g.drawRoundedRectangle (r, r.getHeight() * 0.5f, 1.0f);
     auto t = getLocalBounds().reduced (12, 0);
-    g.setFont (LoomLookAndFeel::font (11.5f));
+    g.setFont (MistLookAndFeel::font (11.5f));
     g.setColour (Colours::textDim);
     const int cw = juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), caption);
     g.drawText (caption, t.removeFromLeft (cw + 6), juce::Justification::centredLeft);
     g.setColour (Colours::text);
-    g.setFont (LoomLookAndFeel::font (11.5f, true));
+    g.setFont (MistLookAndFeel::font (11.5f, true));
     g.drawText (param->getCurrentValueAsText(), t.withTrimmedRight (14), juce::Justification::centredLeft);
     juce::Path arrow;
     const float ax = (float) getWidth() - 16.0f, ay = (float) getHeight() * 0.5f;
@@ -83,7 +83,7 @@ void PillChoice::mouseDown (const juce::MouseEvent&)
 void OutMeter::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds();
-    g.setFont (LoomLookAndFeel::font (11.0f));
+    g.setFont (MistLookAndFeel::mono (10.5f));
     g.setColour (Colours::textDim);
     g.drawText ("Out", r.removeFromLeft (28), juce::Justification::centredLeft);
     const float db = juce::Decibels::gainToDecibels (level, -60.0f);
@@ -98,11 +98,13 @@ void OutMeter::paint (juce::Graphics& g)
 }
 
 // ===========================================================================
-LoomEditor::LoomEditor (LoomProcessor& p)
+MistEditor::MistEditor (MistProcessor& p)
     : AudioProcessorEditor (&p), proc (p),
       opPage (p), envPage (p), routing (p), voicePage (p), filterPage (p), lfo1 (p, 0), lfo2 (p, 1), modPage (p),
       interp (p.apvts, "interp", "Interpolation"), oversampling (p.apvts, "oversampling", "Oversampling")
 {
+    applyTheme (loadSavedTheme());
+    lnf.refreshColours();
     setLookAndFeel (&lnf);
     addAndMakeVisible (content);
 
@@ -149,9 +151,9 @@ LoomEditor::LoomEditor (LoomProcessor& p)
 
     // низ
     drone.attach (proc.apvts, "drone");
-    drone.getProperties().set ("accent", Colours::good.toString());
-    cpuLabel.setFont (LoomLookAndFeel::font (11.0f));
-    cpuLabel.setColour (juce::Label::textColourId, Colours::textDim);
+    drone.getProperties().set ("accent", "good");
+    cpuLabel.setFont (MistLookAndFeel::mono (10.5f));
+    styleLabel (cpuLabel, true);
     cpuLabel.setJustificationType (juce::Justification::centredRight);
     for (juce::Component* c : std::initializer_list<juce::Component*> { &drone, &interp, &oversampling, &cpuLabel })
         content.addAndMakeVisible (c);
@@ -167,13 +169,13 @@ LoomEditor::LoomEditor (LoomProcessor& p)
     startTimerHz (30);
 }
 
-LoomEditor::~LoomEditor()
+MistEditor::~MistEditor()
 {
     stopTimer();
     setLookAndFeel (nullptr);
 }
 
-void LoomEditor::setParam (const juce::String& id, float realValue)
+void MistEditor::setParam (const juce::String& id, float realValue)
 {
     if (auto* p = proc.apvts.getParameter (id))
     {
@@ -183,7 +185,7 @@ void LoomEditor::setParam (const juce::String& id, float realValue)
     }
 }
 
-void LoomEditor::selectOperator (int op)
+void MistEditor::selectOperator (int op)
 {
     selectedOp = op;
     for (int i = 0; i < kNumOps; ++i) slots[(size_t) i]->setSelected (i == op);
@@ -192,7 +194,7 @@ void LoomEditor::selectOperator (int op)
     updatePageTitle();
 }
 
-void LoomEditor::showPage (int pg)
+void MistEditor::showPage (int pg)
 {
     page = pg;
     tabs.setSelectedValue (pg);
@@ -200,7 +202,7 @@ void LoomEditor::showPage (int pg)
     updatePageTitle();
 }
 
-void LoomEditor::updatePageTitle()
+void MistEditor::updatePageTitle()
 {
     auto* m = proc.apvts.getParameter (opId (selectedOp, "mode"));
     const int mode = (int) m->convertFrom0to1 (m->getValue());
@@ -225,7 +227,33 @@ void LoomEditor::updatePageTitle()
 }
 
 // ---------------------------------------------------------------------------
-void LoomEditor::showPresetMenu()
+// Тема — глобальная настройка пользователя (~/Library/Application Support/Mist/Mist.settings)
+static std::unique_ptr<juce::PropertiesFile> openPrefs()
+{
+    juce::PropertiesFile::Options o;
+    o.applicationName = "Mist";
+    o.filenameSuffix = "settings";
+    o.folderName = "Mist";
+    o.osxLibrarySubFolder = "Application Support";
+    return std::make_unique<juce::PropertiesFile> (o);
+}
+
+ThemeId MistEditor::loadSavedTheme()
+{
+    return openPrefs()->getIntValue ("theme", 0) == 1 ? ThemeId::Dark : ThemeId::Light;
+}
+
+void MistEditor::setTheme (ThemeId id)
+{
+    applyTheme (id);
+    lnf.refreshColours();
+    if (auto p = openPrefs()) { p->setValue ("theme", (int) id); p->saveIfNeeded(); }
+    restyleTree (*this);
+    sendLookAndFeelChange();
+    repaint();
+}
+
+void MistEditor::showPresetMenu()
 {
     proc.presets.refresh();
     juce::PopupMenu menu;
@@ -244,7 +272,7 @@ void LoomEditor::showPresetMenu()
     });
 }
 
-void LoomEditor::showSettingsMenu()
+void MistEditor::showSettingsMenu()
 {
     juce::PopupMenu m;
     m.addItem (1, "Save preset...");
@@ -257,17 +285,23 @@ void LoomEditor::showSettingsMenu()
     for (int pct : { 75, 100, 125, 150 })
         size.addItem (100 + pct, juce::String (pct) + "%", true, std::abs (getWidth() - kBaseW * pct / 100) < 4);
     m.addSubMenu ("Window size", size);
+    juce::PopupMenu theme;
+    theme.addItem (201, "Light", true, currentTheme() == ThemeId::Light);
+    theme.addItem (202, "Dark", true, currentTheme() == ThemeId::Dark);
+    m.addSubMenu ("Theme", theme);
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton), [this] (int r)
     {
         if (r == 1) savePreset();
         else if (r == 2) proc.presets.initPatch();
         else if (r == 3) { auto f = PresetManager::getPresetFolder(); f.createDirectory(); f.startAsProcess(); }
         else if (r == 4) proc.presets.deleteUserPreset (proc.presets.getCurrentIndex());
-        else if (r > 100) setSize (kBaseW * (r - 100) / 100, kBaseH * (r - 100) / 100);
+        else if (r == 201) setTheme (ThemeId::Light);
+        else if (r == 202) setTheme (ThemeId::Dark);
+        else if (r > 100 && r < 200) setSize (kBaseW * (r - 100) / 100, kBaseH * (r - 100) / 100);
     });
 }
 
-void LoomEditor::savePreset()
+void MistEditor::savePreset()
 {
     saveWindow = std::make_unique<juce::AlertWindow> ("Save preset", "Samples are stored inside the preset file.",
                                                       juce::MessageBoxIconType::NoIcon, this);
@@ -279,13 +313,13 @@ void LoomEditor::savePreset()
     {
         if (r == 1 && saveWindow != nullptr)
             if (! proc.presets.save (saveWindow->getTextEditorContents ("name"), saveWindow->getTextEditorContents ("category")))
-                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Loom", "Could not save preset.");
+                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Mist", "Could not save preset.");
         saveWindow.reset();
     }), false);
 }
 
 // ---------------------------------------------------------------------------
-void LoomEditor::paint (juce::Graphics& g)
+void MistEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::bg);
     const float s = (float) getWidth() / (float) kBaseW;
@@ -294,19 +328,19 @@ void LoomEditor::paint (juce::Graphics& g)
     // шапка
     drawCard (g, headerArea.toFloat(), 12.0f, true);
     g.setColour (Colours::text);
-    g.setFont (LoomLookAndFeel::font (16.0f, true));
-    g.drawText ("Loom", headerArea.withTrimmedLeft (18).withWidth (60), juce::Justification::centredLeft);
+    g.setFont (MistLookAndFeel::pixel (26.0f));
+    g.drawText ("Mist", headerArea.withTrimmedLeft (18).withWidth (60), juce::Justification::centredLeft);
     g.setColour (Colours::outline);
     g.drawVerticalLine (headerArea.getX() + 74, (float) headerArea.getY() + 14, (float) headerArea.getBottom() - 14);
 
     // карточка настроек
     drawCard (g, settingsArea.toFloat(), 14.0f, true);
     g.setColour (Colours::text);
-    g.setFont (LoomLookAndFeel::font (15.0f, true));
+    g.setFont (MistLookAndFeel::font (15.0f, true));
     auto ta = titleArea;
     g.drawText (pageTitle, ta.removeFromTop (20), juce::Justification::centredLeft);
     g.setColour (Colours::textDim);
-    g.setFont (LoomLookAndFeel::font (11.5f));
+    g.setFont (MistLookAndFeel::font (11.5f));
     g.drawText (pageDescription, titleArea.withHeight (18).translated (0, 22), juce::Justification::centredLeft);
 
     // нижняя панель
@@ -314,7 +348,7 @@ void LoomEditor::paint (juce::Graphics& g)
     g.drawHorizontalLine (bottomArea.getY(), (float) bottomArea.getX() + 4, (float) bottomArea.getRight() - 4);
 }
 
-void LoomEditor::paintOverChildren (juce::Graphics& g)
+void MistEditor::paintOverChildren (juce::Graphics& g)
 {
     // иконка настроек (два «фейдера»), как в макете
     g.addTransform (juce::AffineTransform::scale ((float) getWidth() / (float) kBaseW));
@@ -332,7 +366,7 @@ void LoomEditor::paintOverChildren (juce::Graphics& g)
     }
 }
 
-void LoomEditor::resized()
+void MistEditor::resized()
 {
     const float scale = (float) getWidth() / (float) kBaseW;
     content.setBounds (0, 0, kBaseW, kBaseH);
@@ -394,7 +428,7 @@ void LoomEditor::resized()
     cpuLabel.setBounds (b);
 }
 
-void LoomEditor::timerCallback()
+void MistEditor::timerCallback()
 {
     // аудио → визуализация
     const int ready = proc.scopeFifo.getNumReady();
@@ -430,4 +464,4 @@ void LoomEditor::timerCallback()
         default: break;
     }
 }
-} // namespace loom
+} // namespace mist

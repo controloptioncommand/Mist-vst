@@ -1,7 +1,7 @@
 #include "Visualizer.h"
 #include "Widgets.h"
 
-namespace loom
+namespace mist
 {
 Visualizer::Visualizer()
 {
@@ -214,7 +214,7 @@ void Visualizer::paintSpectrum (juce::Graphics& g, juce::Rectangle<float> area)
     }
 
     // сетка частот
-    g.setFont (LoomLookAndFeel::font (9.5f));
+    g.setFont (MistLookAndFeel::mono (9.5f));
     for (float f : { 50.0f, 100.0f, 200.0f, 500.0f, 1000.0f, 2000.0f, 5000.0f, 10000.0f })
     {
         const float t = std::log (f / 20.0f) / std::log (1000.0f);
@@ -314,7 +314,7 @@ void Visualizer::paintScope (juce::Graphics& g, juce::Rectangle<float> area)
         g.fillRect (px, py, 1.5f, 1.5f);
     }
     g.setColour (juce::Colours::white.withAlpha (0.45f));
-    g.setFont (LoomLookAndFeel::font (9.5f));
+    g.setFont (MistLookAndFeel::mono (9.5f));
     g.drawText ("L", box.withWidth (12).translated (-2, 0), juce::Justification::topLeft);
     g.drawText ("R", box.withTrimmedLeft (box.getWidth() - 12), juce::Justification::topRight);
 }
@@ -335,7 +335,7 @@ static void drawPill (juce::Graphics& g, juce::Rectangle<int> r, const juce::Str
         tr.removeFromLeft (11);
     }
     g.setColour (active ? Colours::text : Colours::textDim);
-    g.setFont (LoomLookAndFeel::font (11.0f, active));
+    g.setFont (MistLookAndFeel::font (11.0f, active));
     g.drawText (text, tr, juce::Justification::centredLeft);
 }
 
@@ -381,4 +381,4 @@ void Visualizer::mouseDown (const juce::MouseEvent& e)
     else if (pillScope.contains (p)) setMode (Scope);
     else if (pillDrone.contains (p) && onDroneClicked) onDroneClicked();
 }
-} // namespace loom
+} // namespace mist

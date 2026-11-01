@@ -2,11 +2,11 @@
 #include "PluginEditor.h"
 #include "Algorithms.h"
 
-namespace loom
+namespace mist
 {
-LoomProcessor::LoomProcessor()
+MistProcessor::MistProcessor()
     : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
-      apvts (*this, nullptr, "LOOM", createParameterLayout()),
+      apvts (*this, nullptr, "MIST", createParameterLayout()),
       presets (*this)
 {
     auto P = [this] (const juce::String& id)
@@ -59,19 +59,19 @@ LoomProcessor::LoomProcessor()
     (void) Wavetable::getBasic();   // построить таблицу заранее, не в аудиопотоке
 }
 
-LoomProcessor::~LoomProcessor()
+MistProcessor::~MistProcessor()
 {
     alive->store (false);
     loaderPool.removeAllJobs (true, 5000);
 }
 
-bool LoomProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
+bool MistProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
     const auto& out = layouts.getMainOutputChannelSet();
     return out == juce::AudioChannelSet::stereo() || out == juce::AudioChannelSet::mono();
 }
 
-void LoomProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+void MistProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     hostSampleRate = sampleRate;
     maxBlock = juce::jmax (samplesPerBlock, 4096);
@@ -87,7 +87,7 @@ void LoomProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 }
 
 // ---------------------------------------------------------------------------
-void LoomProcessor::buildSnapshot()
+void MistProcessor::buildSnapshot()
 {
     const double sr = currentSampleRate;   // эффективная частота (с учётом оверсемплинга)
     auto b = [] (std::atomic<float>* p) { return p->load() > 0.5f; };
@@ -195,7 +195,7 @@ void LoomProcessor::buildSnapshot()
     }
 }
 
-void LoomProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+void MistProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
     const auto t0 = juce::Time::getHighResolutionTicks();
@@ -290,12 +290,12 @@ void LoomProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
 }
 
 // ---------------------------------------------------------------------------
-std::shared_ptr<const SampleAsset> LoomProcessor::getSample (int op) const
+std::shared_ptr<const SampleAsset> MistProcessor::getSample (int op) const
 {
     return std::atomic_load (&samples[(size_t) op]);
 }
 
-void LoomProcessor::setSample (int op, std::shared_ptr<const SampleAsset> asset)
+void MistProcessor::setSample (int op, std::shared_ptr<const SampleAsset> asset)
 {
     auto old = std::atomic_exchange (&samples[(size_t) op], std::move (asset));
     {
@@ -306,7 +306,7 @@ void LoomProcessor::setSample (int op, std::shared_ptr<const SampleAsset> asset)
     collectGarbage();
 }
 
-void LoomProcessor::collectGarbage()
+void MistProcessor::collectGarbage()
 {
     std::lock_guard<std::mutex> lock (garbageMutex);
     // освобождаем только то, что никто, кроме нас, не держит (аудиопоток отпускает ссылку в конце блока)
@@ -315,13 +315,13 @@ void LoomProcessor::collectGarbage()
                    garbage.end());
 }
 
-juce::String LoomProcessor::getLastError() const
+juce::String MistProcessor::getLastError() const
 {
     std::lock_guard<std::mutex> lock (errorMutex);
     return lastError;
 }
 
-void LoomProcessor::loadSampleAsync (int op, const juce::File& file)
+void MistProcessor::loadSampleAsync (int op, const juce::File& file)
 {
     auto aliveFlag = alive;
     loaderPool.addJob ([this, op, file, aliveFlag]
@@ -355,17 +355,17 @@ void LoomProcessor::loadSampleAsync (int op, const juce::File& file)
     });
 }
 
-void LoomProcessor::clearSample (int op)
+void MistProcessor::clearSample (int op)
 {
     setSample (op, nullptr);
 }
 
 // ---------------------------------------------------------------------------
-std::unique_ptr<juce::XmlElement> LoomProcessor::createStateXml (bool includeSamples)
+std::unique_ptr<juce::XmlElement> MistProcessor::createStateXml (bool includeSamples)
 {
     auto state = apvts.copyState();
     auto xml = state.createXml();
-    xml->setAttribute ("loomVersion", 1);
+    xml->setAttribute ("mistVersion", 1);
 
     auto* samplesXml = xml->createNewChildElement ("SAMPLES");
     if (includeSamples)
@@ -380,7 +380,7 @@ std::unique_ptr<juce::XmlElement> LoomProcessor::createStateXml (bool includeSam
     return xml;
 }
 
-void LoomProcessor::restoreStateXml (const juce::XmlElement& xml)
+void MistProcessor::restoreStateXml (const juce::XmlElement& xml)
 {
     if (! xml.hasTagName (apvts.state.getType())) return;
 
@@ -406,7 +406,7 @@ void LoomProcessor::restoreStateXml (const juce::XmlElement& xml)
         setSample (i, loaded[(size_t) i]);
 }
 
-void LoomProcessor::resetToDefaults()
+void MistProcessor::resetToDefaults()
 {
     for (auto* p : getParameters())
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
@@ -415,14 +415,14 @@ void LoomProcessor::resetToDefaults()
         setSample (i, nullptr);
 }
 
-void LoomProcessor::getStateInformation (juce::MemoryBlock& destData)
+void MistProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto xml = createStateXml (true);
     xml->setAttribute ("presetName", presets.getCurrentName());
     copyXmlToBinary (*xml, destData);
 }
 
-void LoomProcessor::setStateInformation (const void* data, int sizeInBytes)
+void MistProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
     {
@@ -431,13 +431,13 @@ void LoomProcessor::setStateInformation (const void* data, int sizeInBytes)
     }
 }
 
-juce::AudioProcessorEditor* LoomProcessor::createEditor()
+juce::AudioProcessorEditor* MistProcessor::createEditor()
 {
-    return new LoomEditor (*this);
+    return new MistEditor (*this);
 }
-} // namespace loom
+} // namespace mist
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new loom::LoomProcessor();
+    return new mist::MistProcessor();
 }

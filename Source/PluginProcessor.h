@@ -8,13 +8,13 @@
 #include <atomic>
 #include <mutex>
 
-namespace loom
+namespace mist
 {
-class LoomProcessor : public juce::AudioProcessor
+class MistProcessor : public juce::AudioProcessor
 {
 public:
-    LoomProcessor();
-    ~LoomProcessor() override;
+    MistProcessor();
+    ~MistProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -25,7 +25,7 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    const juce::String getName() const override { return "Loom"; }
+    const juce::String getName() const override { return "Mist"; }
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
@@ -103,6 +103,6 @@ private:
     juce::MidiBuffer scaledMidi;
     std::atomic<float> *pDrone = nullptr, *pInterp = nullptr, *pOversampling = nullptr;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LoomProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MistProcessor)
 };
-} // namespace loom
+} // namespace mist

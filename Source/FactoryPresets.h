@@ -3,7 +3,7 @@
 #include <vector>
 #include <utility>
 
-namespace loom
+namespace mist
 {
 struct FactoryPreset
 {
@@ -12,4 +12,4 @@ struct FactoryPreset
 };
 
 const std::vector<FactoryPreset>& getFactoryPresets();
-} // namespace loom
+} // namespace mist

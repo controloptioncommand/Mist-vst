@@ -1,8 +1,8 @@
 #include "ModulationPanel.h"
 
-namespace loom
+namespace mist
 {
-FilterPanel::FilterPanel (LoomProcessor& p) : Section ("Filter / Mod Env")
+FilterPanel::FilterPanel (MistProcessor& p) : Section ("Filter / Mod Env")
 {
     auto& s = p.apvts;
     on.attach (s, "filterOn");
@@ -13,11 +13,11 @@ FilterPanel::FilterPanel (LoomProcessor& p) : Section ("Filter / Mod Env")
     for (juce::Component* c : std::initializer_list<juce::Component*> { &on, &type, &cutoff, &reso, &env, &key, &drive, &ma, &md, &ms, &mr, &modEnvLabel })
         addAndMakeVisible (c);
     for (auto* k : { &cutoff, &reso, &env, &key, &drive, &ma, &md, &ms, &mr })
-        k->slider.getProperties().set ("accent", Colours::accent2.toString());
+        k->slider.getProperties().set ("accent", "accent");
 
     modEnvLabel.setText ("MOD ENV", juce::dontSendNotification);
-    modEnvLabel.setFont (LoomLookAndFeel::font (10.0f, true));
-    modEnvLabel.setColour (juce::Label::textColourId, Colours::textDim);
+    modEnvLabel.setFont (MistLookAndFeel::font (10.0f, true));
+    styleLabel (modEnvLabel, true);
 }
 
 void FilterPanel::resized()
@@ -34,14 +34,14 @@ void FilterPanel::resized()
 }
 
 // ===========================================================================
-LfoPanel::LfoPanel (LoomProcessor& p, int i) : Section ("LFO " + juce::String (i + 1), Colours::accent2), proc (p), index (i)
+LfoPanel::LfoPanel (MistProcessor& p, int i) : Section ("LFO " + juce::String (i + 1), Colours::accent2), proc (p), index (i)
 {
     auto& s = p.apvts;
     shape.attach (s, lfoId (i, "shape"));
     div.attach (s, lfoId (i, "div"));
     sync.attach (s, lfoId (i, "sync"));
     rate.attach (s, lfoId (i, "rate"));
-    rate.slider.getProperties().set ("accent", Colours::accent2.toString());
+    rate.slider.getProperties().set ("accent", "accent");
     for (juce::Component* c : std::initializer_list<juce::Component*> { &shape, &div, &sync, &rate })
         addAndMakeVisible (c);
 }
@@ -80,7 +80,7 @@ void LfoPanel::resized()
 }
 
 // ===========================================================================
-ModMatrixPanel::ModMatrixPanel (LoomProcessor& p) : Section ("Mod Matrix")
+ModMatrixPanel::ModMatrixPanel (MistProcessor& p) : Section ("Mod Matrix")
 {
     auto& s = p.apvts;
     for (int i = 0; i < kNumModSlots; ++i)
@@ -90,13 +90,13 @@ ModMatrixPanel::ModMatrixPanel (LoomProcessor& p) : Section ("Mod Matrix")
         row.dst.addItemList (modDestNames(), 1);
         row.amt.setSliderStyle (juce::Slider::LinearHorizontal);
         row.amt.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-        row.value.setFont (LoomLookAndFeel::font (11.0f));
-        row.value.setColour (juce::Label::textColourId, Colours::textDim);
+        row.value.setFont (MistLookAndFeel::mono (10.5f));
+        styleLabel (row.value, true);
         row.value.setJustificationType (juce::Justification::centredRight);
         auto* rowPtr = &row;
         row.amt.onValueChange = [rowPtr] { rowPtr->value.setText (rowPtr->amt.getTextFromValue (rowPtr->amt.getValue()), juce::dontSendNotification); };
         row.amt.setDoubleClickReturnValue (true, 0.0);
-        row.amt.getProperties().set ("accent", Colours::accent2.toString());
+        row.amt.getProperties().set ("accent", "accent");
         row.srcA = std::make_unique<APVTS::ComboBoxAttachment> (s, modId (i, "src"), row.src);
         row.dstA = std::make_unique<APVTS::ComboBoxAttachment> (s, modId (i, "dst"), row.dst);
         row.amtA = std::make_unique<APVTS::SliderAttachment> (s, modId (i, "amt"), row.amt);
@@ -124,11 +124,11 @@ void ModMatrixPanel::resized()
         row.amt.setBounds (line.reduced (6, 0));
     }
 }
-} // namespace loom
+} // namespace mist
 
-namespace loom
+namespace mist
 {
-VoicePage::VoicePage (LoomProcessor& p)
+VoicePage::VoicePage (MistProcessor& p)
 {
     auto& s = p.apvts;
     polyMode.attach (s, "polyMode");
@@ -151,4 +151,4 @@ void VoicePage::resized()
     row2.removeFromLeft (142);
     layoutRow (row2, std::vector<juce::Component*> { &uni, &uniDetune, &uniSpread }, 4, 96);
 }
-} // namespace loom
+} // namespace mist

@@ -2,7 +2,7 @@
 #include "Widgets.h"
 #include "../PluginProcessor.h"
 
-namespace loom
+namespace mist
 {
 // Текущая маршрутизация (алгоритм или матрица) в одном виде
 struct Routing
@@ -13,19 +13,19 @@ struct Routing
     bool on[kNumOps] {};
     bool isMatrix = false;
     int algorithm = 0;   // 0 = matrix
-    static Routing read (LoomProcessor& p);
+    static Routing read (MistProcessor& p);
 };
 
 class AlgorithmDiagram : public juce::Component
 {
 public:
-    explicit AlgorithmDiagram (LoomProcessor& p) : proc (p) {}
+    explicit AlgorithmDiagram (MistProcessor& p) : proc (p) {}
     void paint (juce::Graphics& g) override;
     std::function<void (int)> onOperatorClicked;
     void mouseDown (const juce::MouseEvent& e) override;
 
 private:
-    LoomProcessor& proc;
+    MistProcessor& proc;
     std::array<juce::Point<float>, kNumOps> nodePos {};
     float nodeR = 14.0f;
 };
@@ -34,7 +34,7 @@ private:
 class MatrixGrid : public juce::Component
 {
 public:
-    explicit MatrixGrid (LoomProcessor& p) : proc (p) {}
+    explicit MatrixGrid (MistProcessor& p) : proc (p) {}
     void paint (juce::Graphics& g) override;
     void mouseDown (const juce::MouseEvent& e) override;
     void mouseDrag (const juce::MouseEvent& e) override;
@@ -44,7 +44,7 @@ public:
 private:
     juce::Rectangle<float> cellRect (int row, int col) const;
     juce::RangedAudioParameter* paramFor (int row, int col) const;
-    LoomProcessor& proc;
+    MistProcessor& proc;
     juce::RangedAudioParameter* dragParam = nullptr;
     float dragStartValue = 0;
 };
@@ -52,17 +52,17 @@ private:
 class RoutingPanel : public Section
 {
 public:
-    explicit RoutingPanel (LoomProcessor& p);
+    explicit RoutingPanel (MistProcessor& p);
     void resized() override;
     void refresh();
     AlgorithmDiagram diagram;
 
 private:
     void copyAlgorithmToMatrix();
-    LoomProcessor& proc;
+    MistProcessor& proc;
     ParamChoice algo;
     juce::TextButton prev { "<" }, next { ">" }, toMatrix { "Edit as Matrix" };
     MatrixGrid grid;
     juce::Label hint;
 };
-} // namespace loom
+} // namespace mist
