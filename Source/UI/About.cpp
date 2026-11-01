@@ -234,13 +234,12 @@ void GameView::paint (juce::Graphics& g)
 }
 
 // ===========================================================================
-void AboutPage::BackLogo::paintButton (juce::Graphics& g, bool over, bool)
+void AboutPage::BackLogo::paintButton (juce::Graphics& g, bool over, bool down)
 {
-    // маленький логотип — клик возвращает в плагин
-    g.setColour (over ? Colours::ink.withAlpha (0.7f) : Colours::ink);
+    // маленький логотип — клик возвращает в плагин; без рамки, выделение — сигнальным цветом текста
+    g.setColour ((over || down || hasKeyboardFocus (false)) ? Colours::signal : Colours::ink);
     g.setFont (LnF::pixel (24.0f));
     g.drawText ("Mist", getLocalBounds(), juce::Justification::centred);
-    if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, getLocalBounds().toFloat(), 8.0f);
 }
 
 void AboutPage::CapsuleButton::paintButton (juce::Graphics& g, bool over, bool down)

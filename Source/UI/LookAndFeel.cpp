@@ -284,8 +284,7 @@ void MistLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& b, 
 
     if (b.getProperties()["textOnly"])
     {
-        // кнопка-текст (имя пресета): без подложки и рамки, наведение — цветом текста
-        if (b.hasKeyboardFocus (false)) drawFocusRing (g, r, rad);
+        // кнопка-текст (имя пресета): без подложки и рамки, выделение — цветом текста (см. drawButtonText)
         return;
     }
     if (b.getProperties()["plate"])
@@ -308,7 +307,7 @@ void MistLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton& b, bo
 {
     g.setFont (getTextButtonFont (b, b.getHeight()));
     if (b.getProperties()["textOnly"])
-        g.setColour (! b.isEnabled() ? Colours::ink2 : (over || down) ? Colours::signal : Colours::ink);
+        g.setColour (! b.isEnabled() ? Colours::ink2 : (over || down || b.hasKeyboardFocus (false)) ? Colours::signal : Colours::ink);
     else
         g.setColour (! b.isEnabled() ? Colours::ink2 : b.getToggleState() ? Colours::onSignal : Colours::ink);
     g.drawText (b.getButtonText(), b.getLocalBounds().reduced (8, 0), juce::Justification::centred, true);

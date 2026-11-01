@@ -104,6 +104,8 @@ public:
     void showGame (bool show);
     std::function<void()> onClose;
     FogLogo& getFogForTest() { return logoHit; }
+    void focusBack() { back.grabKeyboardFocus(); }
+    bool backHasFocus() const { return back.hasKeyboardFocus (false); }
 
 private:
     struct BackLogo : juce::Button

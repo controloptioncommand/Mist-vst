@@ -151,12 +151,12 @@ void OutMeter::paint (juce::Graphics& g)
 }
 
 // ===========================================================================
-void LogoButton::paintButton (juce::Graphics& g, bool over, bool)
+void LogoButton::paintButton (juce::Graphics& g, bool over, bool down)
 {
-    g.setColour (over ? Colours::ink.withAlpha (0.75f) : Colours::ink);
+    // без рамки: наведение, нажатие и фокус клавиатурой — сигнальным цветом текста
+    g.setColour ((over || down || hasKeyboardFocus (false)) ? Colours::signal : Colours::ink);
     g.setFont (LnF::pixel (24.0f));
     g.drawText ("Mist", getLocalBounds(), juce::Justification::centred);
-    if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, getLocalBounds().toFloat(), 8.0f);
 }
 
 void IconButton::paintButton (juce::Graphics& g, bool over, bool down)
@@ -367,9 +367,17 @@ void MistEditor::showPage (int pg)
 
 void MistEditor::showAbout (bool show)
 {
+    // фокус переносим только при управлении с клавиатуры, иначе логотип About загорался бы сам
+    const bool viaKeyboard = show ? logo.hasKeyboardFocus (false) : about.backHasFocus();
     if (! show) about.showGame (false);
     about.setVisible (show);
-    if (show) about.toFront (true);
+    if (show)
+    {
+        about.toFront (false);
+        if (viaKeyboard) about.focusBack();
+    }
+    else if (viaKeyboard)
+        logo.grabKeyboardFocus();
 }
 
 void MistEditor::updatePageTitle()
