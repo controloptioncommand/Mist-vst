@@ -232,6 +232,7 @@ MistEditor::MistEditor (MistProcessor& p)
         content.addAndMakeVisible (c);
     presetName.getProperties().set ("textOnly", true);
     presetName.setTitle ("Preset");
+    logo.setWantsKeyboardFocus (false);   // Tab пропускает логотип; с клавиатуры About — через меню настроек
     logo.onClick = [this] { showAbout (true); };
     prevPreset.onClick = [this] { proc.presets.loadNext (-1); };
     nextPreset.onClick = [this] { proc.presets.loadNext (1); };
@@ -368,7 +369,7 @@ void MistEditor::showPage (int pg)
 void MistEditor::showAbout (bool show)
 {
     // фокус переносим только при управлении с клавиатуры, иначе логотип About загорался бы сам
-    const bool viaKeyboard = show ? logo.hasKeyboardFocus (false) : about.backHasFocus();
+    const bool viaKeyboard = show ? settingsButton.hasKeyboardFocus (false) : about.backHasFocus();
     if (! show) about.showGame (false);
     about.setVisible (show);
     if (show)
@@ -377,7 +378,7 @@ void MistEditor::showAbout (bool show)
         if (viaKeyboard) about.focusBack();
     }
     else if (viaKeyboard)
-        logo.grabKeyboardFocus();
+        settingsButton.grabKeyboardFocus();
 }
 
 void MistEditor::updatePageTitle()
