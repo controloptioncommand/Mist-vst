@@ -1,0 +1,83 @@
+#pragma once
+#include "LookAndFeel.h"
+
+namespace mist
+{
+// Версия и дата — показываются на странице About
+namespace AboutInfo
+{
+    inline const char* version = "v1.01";
+    inline const char* date = "1st November 2026";
+    inline const char* author = "made by nnn";
+}
+
+// Пиксельная сова-сипуха 12×13 (тело и крылья — сигнальный цвет, лицо-сердечко и грудка светлые)
+void drawOwl (juce::Graphics& g, juce::Point<int> origin, int unit, int frame);   // frame: 0,1 бег, 2 прыжок, 3 сидит
+
+// Бегалка: сова прыгает через пни и стог сена
+class GameView : public juce::Component, private juce::Timer
+{
+public:
+    GameView();
+    void start();
+    void stop();
+    void paint (juce::Graphics& g) override;
+    void mouseDown (const juce::MouseEvent&) override { jump(); }
+    bool keyPressed (const juce::KeyPress& k) override;
+    void focusGained (FocusChangeType) override { repaint(); }
+    void focusLost (FocusChangeType) override { repaint(); }
+
+private:
+    void timerCallback() override;
+    void jump();
+    void reset();
+    void spawnObstacle();
+
+    enum class State { Ready, Running, Over };
+    struct Obstacle { float x; int type; };   // 0 — пень, 1 — стог сена
+
+    static constexpr int kUnit = 3, kGridW = 226, kGridH = 73, kGround = 60, kOwlX = 22;
+    State state = State::Ready;
+    float owlY = 0.0f, velY = 0.0f, speed = 1.6f, score = 0.0f, nextGap = 60.0f, sinceLast = 0.0f, pebbleOffset = 0.0f;
+    int hi = 0, frame = 0;
+    std::vector<Obstacle> obstacles;
+    juce::Random rng;
+};
+
+// Страница About: на всё окно. Логотип, версия/дата, Play → игра.
+class AboutPage : public juce::Component
+{
+public:
+    AboutPage();
+    void paint (juce::Graphics& g) override;
+    void resized() override;
+    void showGame (bool show);
+    std::function<void()> onClose;
+
+private:
+    struct CloseButton : juce::Button
+    {
+        CloseButton() : juce::Button ("Close") { setTitle ("Close About"); }
+        void paintButton (juce::Graphics&, bool over, bool down) override;
+    };
+    struct PlayButton : juce::Button
+    {
+        PlayButton() : juce::Button ("Play") { setTitle ("Play the owl game"); }
+        void paintButton (juce::Graphics&, bool over, bool down) override;
+    };
+    struct CapsuleButton : juce::Button
+    {
+        explicit CapsuleButton (const juce::String& t) : juce::Button (t) { setTitle (t); }
+        void paintButton (juce::Graphics&, bool over, bool down) override;
+    };
+
+    void drawVersion (juce::Graphics& g, juce::Rectangle<float> r);
+
+    CloseButton close;
+    PlayButton play;
+    CapsuleButton closeGame { "Close game" };
+    GameView game;
+    bool gameMode = false;
+    juce::Rectangle<float> bigLogo, versionLine, hintLine;
+};
+} // namespace mist

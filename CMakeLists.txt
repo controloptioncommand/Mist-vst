@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.22)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "macOS architectures")
 
-project(Mist VERSION 0.1.0 LANGUAGES C CXX)
+project(Mist VERSION 1.0.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,7 +33,7 @@ juce_add_plugin(Mist
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
-    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS TRUE
     COPY_PLUGIN_AFTER_BUILD FALSE
     VST3_CATEGORIES Instrument Synth
     AU_MAIN_TYPE kAudioUnitType_MusicDevice)
@@ -53,7 +53,8 @@ set(MIST_SOURCES
     Source/UI/OperatorPanel.cpp
     Source/UI/RoutingPanel.cpp
     Source/UI/ModulationPanel.cpp
-    Source/UI/Visualizer.cpp)
+    Source/UI/Visualizer.cpp
+    Source/UI/About.cpp)
 
 target_sources(Mist PRIVATE ${MIST_SOURCES})
 target_include_directories(Mist PRIVATE Source)
@@ -68,15 +69,11 @@ set(MIST_DEFS
 
 target_compile_definitions(Mist PUBLIC ${MIST_DEFS})
 
-# Шрифты Medeo (SIL OFL) — встраиваются в плагин
+# Medeo Pixel (SIL OFL) — логотип и название Mist, встраивается в плагин
 juce_add_binary_data(MistFonts
     NAMESPACE MistFonts
     HEADER_NAME BinaryData.h
     SOURCES
-        Resources/Fonts/MedeoSans-Regular.ttf
-        Resources/Fonts/MedeoSans-SemiBold.ttf
-        Resources/Fonts/MedeoMono-Regular.ttf
-        Resources/Fonts/MedeoMono-Medium.ttf
         Resources/Fonts/MedeoPixel-Regular.ttf)
 set_target_properties(MistFonts PROPERTIES POSITION_INDEPENDENT_CODE ON)
 

@@ -3,179 +3,261 @@
 
 namespace mist
 {
-juce::Colour Colours::forOperator (int op)
-{
-    return opColours[juce::jlimit (0, 5, op)];
-}
-
 // ---------------------------------------------------------------------------
-// Темы. ВРЕМЕННЫЕ палитры — будут заменены палитрами пользователя.
-const Theme& getTheme (ThemeId id)
+// Палитры (из дизайна)
+namespace
 {
-    static const Theme light {
-        juce::Colour (0xfff2f2f4), juce::Colour (0xffffffff), juce::Colour (0xfff5f5f7), juce::Colour (0xffe3e3e8),
-        juce::Colour (0xffe6e6eb), juce::Colour (0xff1c1c1e), juce::Colour (0xff8e8e93), juce::Colour (0xff1e88ff),
-        juce::Colour (0xff34c759), juce::Colour (0xffe5484d), juce::Colour (0xff0d0d12),
-        { juce::Colour (0xff5b5bd6), juce::Colour (0xffe5484d), juce::Colour (0xfff76b15),
-          juce::Colour (0xff30a46c), juce::Colour (0xff0ea5b7), juce::Colour (0xffd6409f) },
-        0.06f };
-    static const Theme dark {
-        juce::Colour (0xff0e0e10), juce::Colour (0xff17171a), juce::Colour (0xff1f1f23), juce::Colour (0xff2a2a2f),
-        juce::Colour (0xff2c2c31), juce::Colour (0xffececf0), juce::Colour (0xff8a8a92), juce::Colour (0xff3d9bff),
-        juce::Colour (0xff30d158), juce::Colour (0xffff5a5f), juce::Colour (0xff08080a),
-        { juce::Colour (0xff7b7bf0), juce::Colour (0xffff6369), juce::Colour (0xffff8b3d),
-          juce::Colour (0xff3dd68c), juce::Colour (0xff22c3d6), juce::Colour (0xffeb6bc0) },
-        0.35f };
-    return id == ThemeId::Dark ? dark : light;
-}
+struct Palette
+{
+    juce::uint32 window, surface, well, track, ink, ink2, signal, onSignal, carrier, modulator, live;
+    juce::Colour glass;
+    std::array<juce::uint32, 3> carrierRamp, modulatorRamp;
+    float highlightAlpha;   // внутренний светлый блик стекла
+};
 
-static ThemeId gTheme = ThemeId::Light;
+const Palette oxygen {
+    0xffE4E5E1, 0xffF5F5F2, 0xffE9EAE6, 0xffC2C3BE, 0xff131416, 0xff4B4D52, 0xffE84A00, 0xff131416,
+    0xff2740F0, 0xffD7245E, 0xff138A62,
+    juce::Colour ((juce::uint8) 245, (juce::uint8) 245, (juce::uint8) 242, 0.55f),
+    { 0xff6676E6, 0xff2740F0, 0xffE84A00 }, { 0xffD4577F, 0xffD7245E, 0xffE84A00 },
+    0.70f };
+
+const Palette rubber {
+    0xff0F1012, 0xff18191C, 0xff121316, 0xff3E3F45, 0xffEDEDE9, 0xffA9AAAE, 0xffFF6B2C, 0xff131416,
+    0xff8EA0FF, 0xffFF7AA2, 0xff4CD9A6,
+    juce::Colour ((juce::uint8) 36, (juce::uint8) 37, (juce::uint8) 41, 0.5f),
+    { 0xff5C69C9, 0xff8EA0FF, 0xffFF6B2C }, { 0xffC25A82, 0xffFF7AA2, 0xffFF6B2C },
+    0.10f };
+
+ThemeId gTheme = ThemeId::Oxygen;
+float gHighlight = 0.7f;
+bool gReduceTransparency = false, gReduceMotion = false;
+
+bool readMacDefault (const char* key)
+{
+   #if JUCE_MAC
+    juce::ChildProcess p;
+    if (p.start (juce::StringArray { "/usr/bin/defaults", "read", "com.apple.universalaccess", key }))
+    {
+        const auto out = p.readAllProcessOutput().trim();
+        p.waitForProcessToFinish (500);
+        return out == "1";
+    }
+   #else
+    juce::ignoreUnused (key);
+   #endif
+    return false;
+}
+} // namespace
+
 ThemeId currentTheme() { return gTheme; }
 
 void applyTheme (ThemeId id)
 {
     gTheme = id;
-    const auto& t = getTheme (id);
-    Colours::bg = t.bg; Colours::panel = t.panel; Colours::panelHi = t.panelHi; Colours::outline = t.outline;
-    Colours::track = t.track; Colours::text = t.text; Colours::textDim = t.textDim; Colours::accent = t.accent;
-    Colours::accent2 = t.accent; Colours::good = t.good; Colours::danger = t.danger; Colours::vizBg = t.vizBg;
-    for (int i = 0; i < 6; ++i) Colours::opColours[i] = t.ops[(size_t) i];
+    const auto& p = id == ThemeId::Rubber ? rubber : oxygen;
+    using C = juce::Colour;
+    Colours::window = C (p.window);   Colours::surface = C (p.surface); Colours::well = C (p.well);
+    Colours::track = C (p.track);     Colours::ink = C (p.ink);         Colours::ink2 = C (p.ink2);
+    Colours::signal = C (p.signal);   Colours::onSignal = C (p.onSignal);
+    Colours::carrier = C (p.carrier); Colours::modulator = C (p.modulator); Colours::live = C (p.live);
+    Colours::glass = p.glass;
+    Colours::outline = Colours::ink.withAlpha (0.12f);
+    for (int i = 0; i < 3; ++i)
+    {
+        Colours::carrierRamp[(size_t) i] = C (p.carrierRamp[(size_t) i]);
+        Colours::modulatorRamp[(size_t) i] = C (p.modulatorRamp[(size_t) i]);
+    }
+    gHighlight = p.highlightAlpha;
+
+    Colours::bg = Colours::window;   Colours::panel = Colours::surface; Colours::panelHi = Colours::well;
+    Colours::text = Colours::ink;    Colours::textDim = Colours::ink2;
+    Colours::accent = Colours::signal; Colours::accent2 = Colours::signal;
+    Colours::good = Colours::live;   Colours::danger = Colours::signal;
+    Colours::vizBg = Colours::well;
+}
+
+juce::Colour Colours::forOperator (int op)
+{
+    switch (opRole[(size_t) juce::jlimit (0, 5, op)])
+    {
+        case 0:  return carrier;
+        case 1:  return modulator;
+        default: return ink2;
+    }
+}
+
+const std::array<juce::Colour, 3>& Colours::rampForOperator (int op)
+{
+    return opRole[(size_t) juce::jlimit (0, 5, op)] == 1 ? modulatorRamp : carrierRamp;
+}
+
+bool Accessibility::reduceTransparency() { return gReduceTransparency; }
+bool Accessibility::reduceMotion()       { return gReduceMotion; }
+void Accessibility::refresh()
+{
+    gReduceTransparency = readMacDefault ("reduceTransparency");
+    gReduceMotion = readMacDefault ("reduceMotion");
+}
+
+juce::Colour rampColour (const std::array<juce::Colour, 3>& ramp, float t)
+{
+    t = juce::jlimit (0.0f, 1.0f, t);
+    if (t < 0.55f) return ramp[0].interpolatedWith (ramp[1], t / 0.55f);
+    return ramp[1].interpolatedWith (ramp[2], (t - 0.55f) / 0.45f);
+}
+
+int rampBucket (float db)
+{
+    const float t = juce::jlimit (0.0f, 1.0f, (db + 24.0f) / 24.0f);
+    return juce::jmin (9, (int) (t * 10.0f));
+}
+
+juce::Colour rampBucketColour (const std::array<juce::Colour, 3>& ramp, int bucket)
+{
+    return rampColour (ramp, ((float) bucket + 0.5f) / 10.0f);
 }
 
 // ---------------------------------------------------------------------------
-// Шрифты из BinaryData
+// Шрифты
 namespace
 {
-struct Typefaces
+juce::Typeface::Ptr pixelTypeface()
 {
-    juce::Typeface::Ptr sans, sansSemi, mono, monoMedium, pixel;
-    Typefaces()
-    {
-        auto load = [] (const void* d, int n) { return juce::Typeface::createSystemTypefaceFor (d, (size_t) n); };
-        sans       = load (MistFonts::MedeoSansRegular_ttf,  MistFonts::MedeoSansRegular_ttfSize);
-        sansSemi   = load (MistFonts::MedeoSansSemiBold_ttf, MistFonts::MedeoSansSemiBold_ttfSize);
-        mono       = load (MistFonts::MedeoMonoRegular_ttf,  MistFonts::MedeoMonoRegular_ttfSize);
-        monoMedium = load (MistFonts::MedeoMonoMedium_ttf,   MistFonts::MedeoMonoMedium_ttfSize);
-        pixel      = load (MistFonts::MedeoPixelRegular_ttf, MistFonts::MedeoPixelRegular_ttfSize);
-    }
-};
-const Typefaces& typefaces() { static const Typefaces t; return t; }
-
-juce::Font makeFont (juce::Typeface::Ptr tf, float size)
-{
-    return juce::Font (juce::FontOptions (tf).withHeight (size));
+    // Medeo Pixel (SIL OFL), встроен через BinaryData
+    static juce::Typeface::Ptr tf = juce::Typeface::createSystemTypefaceFor (MistFonts::MedeoPixelRegular_ttf,
+                                                                             (size_t) MistFonts::MedeoPixelRegular_ttfSize);
+    return tf;
 }
 } // namespace
 
 juce::Font MistLookAndFeel::font (float size, bool bold)
 {
-    return makeFont (bold ? typefaces().sansSemi : typefaces().sans, size);
+    // системный шрифт без засечек (SF Pro на Mac)
+    return juce::Font (juce::FontOptions (size, bold ? juce::Font::bold : juce::Font::plain));
 }
 
-juce::Font MistLookAndFeel::mono (float size, bool medium)
+juce::Font MistLookAndFeel::mono (float size, bool bold)
 {
-    return makeFont (medium ? typefaces().monoMedium : typefaces().mono, size);
+    return juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), size,
+                                          bold ? juce::Font::bold : juce::Font::plain));
 }
 
 juce::Font MistLookAndFeel::pixel (float size)
 {
-    return makeFont (typefaces().pixel, size);
+    return juce::Font (juce::FontOptions (pixelTypeface()).withHeight (size));
 }
 
-juce::Typeface::Ptr MistLookAndFeel::getTypefaceForFont (const juce::Font& f)
-{
-    // всё, что рисуется шрифтом «по умолчанию» (меню, диалоги, редакторы), — Medeo Sans
-    if (f.getTypefaceName() == juce::Font::getDefaultSansSerifFontName() || f.getTypefaceName().isEmpty())
-        return f.isBold() ? typefaces().sansSemi : typefaces().sans;
-    return LookAndFeel_V4::getTypefaceForFont (f);
-}
-
+// ---------------------------------------------------------------------------
 MistLookAndFeel::MistLookAndFeel()
 {
-    if (Colours::bg == juce::Colour()) applyTheme (ThemeId::Light);
+    if (Colours::window == juce::Colour()) applyTheme (ThemeId::Oxygen);
     refreshColours();
 }
 
 void MistLookAndFeel::refreshColours()
 {
-    setColour (juce::ResizableWindow::backgroundColourId, Colours::bg);
-    setColour (juce::Label::textColourId, Colours::text);
-    setColour (juce::Slider::textBoxTextColourId, Colours::textDim);
+    using namespace Colours;
+    setColour (juce::ResizableWindow::backgroundColourId, window);
+    setColour (juce::Label::textColourId, ink);
+    setColour (juce::Slider::textBoxTextColourId, ink2);
     setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     setColour (juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
-    setColour (juce::ComboBox::backgroundColourId, Colours::panelHi);
-    setColour (juce::ComboBox::textColourId, Colours::text);
-    setColour (juce::ComboBox::outlineColourId, Colours::outline);
-    setColour (juce::ComboBox::arrowColourId, Colours::textDim);
-    setColour (juce::PopupMenu::backgroundColourId, Colours::panel);
-    setColour (juce::PopupMenu::textColourId, Colours::text);
-    setColour (juce::PopupMenu::headerTextColourId, Colours::textDim);
-    setColour (juce::PopupMenu::highlightedBackgroundColourId, Colours::accent.withAlpha (0.12f));
-    setColour (juce::PopupMenu::highlightedTextColourId, Colours::text);
-    setColour (juce::TextButton::buttonColourId, Colours::panelHi);
-    setColour (juce::TextButton::buttonOnColourId, Colours::panel);
-    setColour (juce::TextButton::textColourOffId, Colours::text);
-    setColour (juce::TextButton::textColourOnId, Colours::text);
-    setColour (juce::TextEditor::backgroundColourId, Colours::panelHi);
-    setColour (juce::TextEditor::textColourId, Colours::text);
-    setColour (juce::TextEditor::highlightColourId, Colours::accent.withAlpha (0.25f));
-    setColour (juce::TextEditor::outlineColourId, Colours::outline);
-    setColour (juce::TextEditor::focusedOutlineColourId, Colours::accent);
-    setColour (juce::CaretComponent::caretColourId, Colours::text);
-    setColour (juce::AlertWindow::backgroundColourId, Colours::panel);
-    setColour (juce::AlertWindow::textColourId, Colours::text);
-    setColour (juce::AlertWindow::outlineColourId, Colours::outline);
+    setColour (juce::ComboBox::backgroundColourId, well);
+    setColour (juce::ComboBox::textColourId, ink);
+    setColour (juce::ComboBox::outlineColourId, outline);
+    setColour (juce::ComboBox::arrowColourId, ink2);
+    setColour (juce::PopupMenu::backgroundColourId, surface);
+    setColour (juce::PopupMenu::textColourId, ink);
+    setColour (juce::PopupMenu::headerTextColourId, ink2);
+    setColour (juce::PopupMenu::highlightedBackgroundColourId, signal);
+    setColour (juce::PopupMenu::highlightedTextColourId, onSignal);
+    setColour (juce::TextButton::buttonColourId, well);
+    setColour (juce::TextButton::buttonOnColourId, signal);
+    setColour (juce::TextButton::textColourOffId, ink);
+    setColour (juce::TextButton::textColourOnId, onSignal);
+    setColour (juce::TextEditor::backgroundColourId, well);
+    setColour (juce::TextEditor::textColourId, ink);
+    setColour (juce::TextEditor::highlightColourId, signal.withAlpha (0.3f));
+    setColour (juce::TextEditor::outlineColourId, outline);
+    setColour (juce::TextEditor::focusedOutlineColourId, signal);
+    setColour (juce::CaretComponent::caretColourId, ink);
+    setColour (juce::AlertWindow::backgroundColourId, surface);
+    setColour (juce::AlertWindow::textColourId, ink);
+    setColour (juce::AlertWindow::outlineColourId, outline);
 }
 
 static juce::Colour accentOf (juce::Component& c)
 {
     const auto v = c.getProperties()["accent"].toString();
-    if (v.isEmpty() || v == "accent") return Colours::accent;
-    if (v == "good") return Colours::good;
+    if (v.isEmpty() || v == "accent" || v == "signal") return Colours::signal;
+    if (v == "good" || v == "live") return Colours::live;
     if (v.startsWith ("op")) return Colours::forOperator (v.getTrailingIntValue());
     return juce::Colour::fromString (v);
+}
+
+void MistLookAndFeel::drawFocusRing (juce::Graphics& g, juce::Rectangle<float> r, float radius)
+{
+    g.setColour (Colours::signal);
+    g.drawRoundedRectangle (r.reduced (1.5f), juce::jmax (0.0f, radius - 1.5f), 3.0f);
+}
+
+void MistLookAndFeel::drawGlass (juce::Graphics& g, juce::Rectangle<float> r, float radius)
+{
+    // «Уменьшить прозрачность» → стекло становится плотным (цвет поверхности)
+    g.setColour (Accessibility::reduceTransparency() ? Colours::surface : Colours::glass);
+    g.fillRoundedRectangle (r, radius);
+    g.setColour (Colours::outline);
+    g.drawRoundedRectangle (r.reduced (0.5f), radius, 1.0f);
+    // внутренний светлый блик сверху
+    juce::Path hl;
+    const auto in = r.reduced (1.0f);
+    const float rr = juce::jmax (0.0f, radius - 1.0f);
+    hl.startNewSubPath (in.getX() + rr * 0.6f, in.getY() + 0.5f);
+    hl.lineTo (in.getRight() - rr * 0.6f, in.getY() + 0.5f);
+    g.setColour (juce::Colours::white.withAlpha (gHighlight));
+    g.strokePath (hl, juce::PathStrokeType (1.0f));
 }
 
 void MistLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos,
                                         float startAngle, float endAngle, juce::Slider& s)
 {
-    const auto bounds = juce::Rectangle<int> (x, y, w, h).toFloat().reduced (2.0f);
+    const auto bounds = juce::Rectangle<int> (x, y, w, h).toFloat().reduced (3.0f);
     const float r = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f;
     const auto c = bounds.getCentre();
-    const float lineW = juce::jmax (2.5f, r * 0.13f);
+    const float lineW = juce::jmax (2.5f, r * 0.12f);
     const float arcR = r - lineW * 0.5f;
     const float angle = startAngle + pos * (endAngle - startAngle);
-    const auto accent = accentOf (s);
 
     juce::Path track;
     track.addCentredArc (c.x, c.y, arcR, arcR, 0, startAngle, endAngle, true);
     g.setColour (Colours::track);
     g.strokePath (track, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
+    // двуполярные — дуга растёт от центра
     const bool bipolar = s.getMinimum() < 0 && s.getMaximum() > 0;
     const float from = bipolar ? (startAngle + endAngle) * 0.5f : startAngle;
     if (s.isEnabled() && std::abs (angle - from) > 0.001f)
     {
         juce::Path val;
         val.addCentredArc (c.x, c.y, arcR, arcR, 0, juce::jmin (from, angle), juce::jmax (from, angle), true);
-        g.setColour (accent);
+        g.setColour (accentOf (s));
         g.strokePath (val, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 
-    // белая «шайба» с мягкой тенью
     const float knobR = r - lineW - 3.0f;
-    juce::DropShadow (juce::Colours::black.withAlpha (0.10f), 4, { 0, 1 })
-        .drawForPath (g, [&] { juce::Path p; p.addEllipse (c.x - knobR, c.y - knobR, knobR * 2, knobR * 2); return p; }());
-    g.setColour (Colours::panel);
+    g.setColour (Colours::surface);
     g.fillEllipse (c.x - knobR, c.y - knobR, knobR * 2, knobR * 2);
     g.setColour (Colours::outline);
     g.drawEllipse (c.x - knobR, c.y - knobR, knobR * 2, knobR * 2, 1.0f);
 
-    // указатель
     const float p0 = knobR * 0.25f, p1 = knobR * 0.78f;
     const auto dir = juce::Point<float> (std::sin (angle), -std::cos (angle));
-    g.setColour (s.isEnabled() ? Colours::text : Colours::textDim);
+    g.setColour (s.isEnabled() ? Colours::ink : Colours::ink2);
     g.drawLine ({ c + dir * p0, c + dir * p1 }, juce::jmax (1.6f, r * 0.07f));
+
+    if (s.hasKeyboardFocus (false))
+        drawFocusRing (g, juce::Rectangle<float> (c.x - r - 3.0f, c.y - r - 3.0f, (r + 3.0f) * 2, (r + 3.0f) * 2), r + 3.0f);
 }
 
 void MistLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int w, int h, float pos, float, float,
@@ -184,17 +266,19 @@ void MistLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int w, 
     auto b = juce::Rectangle<int> (x, y, w, h).toFloat();
     if (style == juce::Slider::LinearHorizontal || style == juce::Slider::LinearBar)
     {
-        auto track = b.withSizeKeepingCentre (b.getWidth(), 4.0f);
+        auto tr = b.withSizeKeepingCentre (b.getWidth(), 4.0f);
         g.setColour (Colours::track);
-        g.fillRoundedRectangle (track, 2.0f);
+        g.fillRoundedRectangle (tr, 2.0f);
         const bool bipolar = s.getMinimum() < 0 && s.getMaximum() > 0;
-        const float mid = bipolar ? (float) s.getPositionOfValue (0.0) : track.getX();
+        const float mid = bipolar ? (float) s.getPositionOfValue (0.0) : tr.getX();
         g.setColour (accentOf (s));
-        g.fillRoundedRectangle (juce::Rectangle<float> (juce::jmin (mid, pos), track.getY(), std::abs (pos - mid), 4.0f), 2.0f);
-        g.setColour (Colours::panel);
+        g.fillRoundedRectangle (juce::Rectangle<float> (juce::jmin (mid, pos), tr.getY(), std::abs (pos - mid), 4.0f), 2.0f);
+        g.setColour (Colours::surface);
         g.fillEllipse (pos - 6.0f, b.getCentreY() - 6.0f, 12.0f, 12.0f);
-        g.setColour (Colours::outline.darker (0.15f));
+        g.setColour (Colours::ink2);
         g.drawEllipse (pos - 6.0f, b.getCentreY() - 6.0f, 12.0f, 12.0f, 1.0f);
+        if (s.hasKeyboardFocus (false))
+            drawFocusRing (g, b, 6.0f);
     }
     else
     {
@@ -204,68 +288,83 @@ void MistLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int w, 
 
 void MistLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& b, const juce::Colour&, bool over, bool down)
 {
-    auto r = b.getLocalBounds().toFloat().reduced (0.5f);
+    // чип: видимая капсула может быть ниже зоны нажатия (property "chipH")
+    auto full = b.getLocalBounds().toFloat();
+    auto r = full;
+    if (b.getProperties().contains ("chipH"))
+        r = r.withSizeKeepingCentre (r.getWidth(), juce::jmin (r.getHeight(), (float) (double) b.getProperties()["chipH"]));
+    r = r.reduced (0.5f);
     const float rad = r.getHeight() * 0.5f;
-    const bool on = b.getToggleState();
-    auto base = on ? Colours::panel : Colours::panelHi;
-    if (over) base = base.darker (0.03f);
-    if (down) base = base.darker (0.07f);
-    if (on)
-        juce::DropShadow (juce::Colours::black.withAlpha (0.10f), 4, { 0, 1 })
-            .drawForRectangle (g, r.toNearestInt());
-    g.setColour (base);
-    g.fillRoundedRectangle (r, rad);
-    if (! b.getProperties()["noOutline"])
+
+    if (b.getProperties()["glass"])
+        drawGlass (g, r, rad);
+    else
     {
-        g.setColour (Colours::outline);
-        g.drawRoundedRectangle (r, rad, 1.0f);
+        auto base = b.getToggleState() ? Colours::signal : Colours::well;
+        if (over) base = base.overlaidWith (Colours::ink.withAlpha (0.04f));
+        if (down) base = base.overlaidWith (Colours::ink.withAlpha (0.08f));
+        g.setColour (base);
+        g.fillRoundedRectangle (r, rad);
+        if (! b.getProperties()["noOutline"])
+        {
+            g.setColour (Colours::outline);
+            g.drawRoundedRectangle (r, rad, 1.0f);
+        }
     }
+    if (b.hasKeyboardFocus (false))
+        drawFocusRing (g, r.expanded (2.0f), rad + 2.0f);
 }
 
 void MistLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton& b, bool, bool)
 {
     g.setFont (getTextButtonFont (b, b.getHeight()));
-    g.setColour (b.isEnabled() ? Colours::text : Colours::textDim);
-    g.drawText (b.getButtonText(), b.getLocalBounds().reduced (6, 0), juce::Justification::centred, true);
+    g.setColour (! b.isEnabled() ? Colours::ink2 : b.getToggleState() ? Colours::onSignal : Colours::ink);
+    g.drawText (b.getButtonText(), b.getLocalBounds().reduced (8, 0), juce::Justification::centred, true);
 }
 
 void MistLookAndFeel::drawSwitch (juce::Graphics& g, juce::Rectangle<float> r, bool on, juce::Colour onColour)
 {
     const float rad = r.getHeight() * 0.5f;
-    g.setColour (on ? onColour : Colours::track.darker (0.05f));
+    g.setColour (on ? onColour : Colours::track);
     g.fillRoundedRectangle (r, rad);
     const float d = r.getHeight() - 4.0f;
     const float kx = on ? r.getRight() - d - 2.0f : r.getX() + 2.0f;
-    g.setColour (juce::Colours::white);
+    g.setColour (Colours::surface);
     g.fillEllipse (kx, r.getY() + 2.0f, d, d);
+    g.setColour (Colours::outline);
+    g.drawEllipse (kx, r.getY() + 2.0f, d, d, 1.0f);
 }
 
 void MistLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& b, bool, bool)
 {
     auto r = b.getLocalBounds().toFloat();
-    const float sh = juce::jmin (16.0f, r.getHeight() - 2.0f);
-    auto sw = juce::Rectangle<float> (r.getX() + 1, r.getCentreY() - sh * 0.5f, sh * 1.75f, sh);
-    drawSwitch (g, sw, b.getToggleState(), b.isEnabled() ? accentOf (b) : Colours::textDim);
-    g.setColour (b.isEnabled() ? Colours::text : Colours::textDim);
-    g.setFont (font (12.0f));
-    g.drawText (b.getButtonText(), r.withLeft (sw.getRight() + 6), juce::Justification::centredLeft);
+    const float sh = juce::jmin (18.0f, r.getHeight() - 4.0f);
+    auto sw = juce::Rectangle<float> (r.getX() + 2, r.getCentreY() - sh * 0.5f, sh * 1.8f, sh);
+    drawSwitch (g, sw, b.getToggleState(), b.isEnabled() ? accentOf (b) : Colours::ink2);
+    g.setColour (b.isEnabled() ? Colours::ink : Colours::ink2);
+    g.setFont (font (Type::callout));
+    g.drawText (b.getButtonText(), r.withLeft (sw.getRight() + 7), juce::Justification::centredLeft);
+    if (b.hasKeyboardFocus (false))
+        drawFocusRing (g, sw.expanded (3.0f), sh * 0.5f + 3.0f);
 }
 
 void MistLookAndFeel::drawComboBox (juce::Graphics& g, int w, int h, bool, int, int, int, int, juce::ComboBox& box)
 {
     auto r = juce::Rectangle<int> (0, 0, w, h).toFloat().reduced (0.5f);
     const float rad = juce::jmin (r.getHeight() * 0.5f, 10.0f);
-    g.setColour (box.findColour (juce::ComboBox::backgroundColourId));
+    g.setColour (Colours::well);
     g.fillRoundedRectangle (r, rad);
-    g.setColour (box.findColour (juce::ComboBox::outlineColourId));
+    g.setColour (Colours::outline);
     g.drawRoundedRectangle (r, rad, 1.0f);
     const float ax = (float) w - 13.0f, ay = (float) h * 0.5f;
     juce::Path arrow;
     arrow.startNewSubPath (ax - 3.5f, ay - 1.5f);
     arrow.lineTo (ax, ay + 2.0f);
     arrow.lineTo (ax + 3.5f, ay - 1.5f);
-    g.setColour (Colours::textDim);
+    g.setColour (Colours::ink2);
     g.strokePath (arrow, juce::PathStrokeType (1.4f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    if (box.hasKeyboardFocus (true))
+        drawFocusRing (g, r, rad);
 }
 
 void MistLookAndFeel::positionComboBoxText (juce::ComboBox& box, juce::Label& label)
@@ -276,24 +375,24 @@ void MistLookAndFeel::positionComboBoxText (juce::ComboBox& box, juce::Label& la
 
 void MistLookAndFeel::drawPopupMenuBackground (juce::Graphics& g, int w, int h)
 {
-    g.fillAll (Colours::panel);
+    g.fillAll (Colours::surface);
     g.setColour (Colours::outline);
     g.drawRect (0, 0, w, h);
 }
 
-juce::Font MistLookAndFeel::getComboBoxFont (juce::ComboBox&) { return font (12.5f); }
+juce::Font MistLookAndFeel::getComboBoxFont (juce::ComboBox&) { return font (Type::callout); }
 juce::Font MistLookAndFeel::getLabelFont (juce::Label& l)   { return l.getFont(); }
-juce::Font MistLookAndFeel::getPopupMenuFont()               { return font (13.5f); }
-juce::Font MistLookAndFeel::getTextButtonFont (juce::TextButton&, int h) { return font (juce::jmin (12.5f, (float) h * 0.55f)); }
+juce::Font MistLookAndFeel::getPopupMenuFont()               { return font (Type::body); }
+juce::Font MistLookAndFeel::getTextButtonFont (juce::TextButton&, int h) { return font (juce::jmin (Type::callout, (float) h * 0.55f)); }
 
 juce::Label* MistLookAndFeel::createSliderTextBox (juce::Slider& s)
 {
     auto* l = LookAndFeel_V4::createSliderTextBox (s);
-    l->setFont (font (11.0f));
-    l->setColour (juce::Label::textColourId, Colours::textDim);
-    l->setColour (juce::Label::outlineWhenEditingColourId, Colours::accent);
-    l->setColour (juce::Label::backgroundWhenEditingColourId, Colours::panel);
-    l->setColour (juce::TextEditor::textColourId, Colours::text);
+    l->setFont (mono (Type::footnote));
+    l->setColour (juce::Label::textColourId, Colours::ink2);
+    l->setColour (juce::Label::outlineWhenEditingColourId, Colours::signal);
+    l->setColour (juce::Label::backgroundWhenEditingColourId, Colours::surface);
+    l->setColour (juce::TextEditor::textColourId, Colours::ink);
     return l;
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 #include "Widgets.h"
 #include "../PluginProcessor.h"
+#include <deque>
 
 namespace mist
 {
@@ -26,6 +27,10 @@ public:
     void filesDropped (const juce::StringArray& files, int, int) override;
 
     void openFileChooser();
+    bool hasSample() const;
+    bool keyPressed (const juce::KeyPress& k) override;
+    void focusGained (FocusChangeType) override { repaint(); }
+    void focusLost (FocusChangeType) override { repaint(); }
 
 private:
     float param (const char* name) const;
@@ -45,7 +50,7 @@ class WaveView : public juce::Component
 {
 public:
     explicit WaveView (MistProcessor& p) : proc (p) {}
-    void setOperator (int op) { opIndex = op; repaint(); }
+    void setOperator (int op) { opIndex = op; ghosts.clear(); repaint(); }
     void paint (juce::Graphics& g) override;
     void mouseDown (const juce::MouseEvent& e) override;
     void mouseDrag (const juce::MouseEvent& e) override;
@@ -57,6 +62,7 @@ private:
     MistProcessor& proc;
     int opIndex = 0;
     juce::RangedAudioParameter* dragging = nullptr;
+    std::deque<float> ghosts;
 };
 
 // Страница «Operator»: параметры выбранного оператора; набор второй строки зависит от режима

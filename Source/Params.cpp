@@ -131,7 +131,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         add (std::make_unique<APC> (pid (opId (i, "mode")), nm ("Mode"), juce::StringArray { "Scrub", "Sample PM", "Grain" }, 0));
         add (std::make_unique<API> (pid (opId (i, "coarse")), nm ("Coarse"), 0, 32, 1, juce::AudioParameterIntAttributes()
                 .withStringFromValueFunction ([] (int v, int) { return v == 0 ? juce::String ("0.5") : juce::String (v); })));
-        add (std::make_unique<APF> (pid (opId (i, "fine")), nm ("Fine"), NR (0.0f, 1.0f), 0.0f, percentAttr()));
+        add (std::make_unique<APF> (pid (opId (i, "fine")), nm ("Fine"), NR (-0.5f, 0.5f), 0.0f, bipolarPercentAttr()));
         add (std::make_unique<APF> (pid (opId (i, "detune")), nm ("Detune"), NR (-100.0f, 100.0f), 0.0f, unitAttr ("ct", 1)));
         add (std::make_unique<APB> (pid (opId (i, "fixed")), nm ("Fixed"), false));
         NR fixedRange (0.1f, 10000.0f, 0.0f); fixedRange.setSkewForCentre (200.0f);

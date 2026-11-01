@@ -6,10 +6,11 @@
 
 namespace mist
 {
-// Визуализация результата. Три режима:
-//  Waves    — «стопка» осциллограмм (как в макете), свежая — синяя, спереди
-//  Spectrum — спектрограмма + текущий спектр (в духе MiniMeters)
-//  Scope    — прокручивающаяся форма волны, окрашенная по частотам + стереометр
+// Главный вид. Три вкладки (стеклянные, снизу справа):
+//  Scope    — плотная волна: одна полоска на колонку пикселей, цвет по громкости (рампа несущей)
+//  Waves    — хребтовые линии (ridgelines)
+//  Spectrum — спектрограмма в той же рампе
+// Сверху справа — стеклянная легенда «−24 dB [шкала] 0 dB».
 class Visualizer : public juce::Component
 {
 public:
@@ -17,39 +18,40 @@ public:
 
     Visualizer();
     void setSampleRate (double sr) { sampleRate = sr > 0 ? sr : 44100.0; }
-    void push (const float* l, const float* r, int n);   // с UI-таймера
-    void tick();                                          // 30 Гц
+    void push (const float* l, const float* r, int n);
+    void tick();
     void setMode (Mode m);
     Mode getMode() const { return mode; }
-
-    void setDroneState (bool on, int lowestNote) { droneOn = on; droneNote = lowestNote; }
-    std::function<void()> onDroneClicked;
 
     void paint (juce::Graphics& g) override;
     void resized() override;
     void mouseDown (const juce::MouseEvent& e) override;
+    bool keyPressed (const juce::KeyPress& k) override;
+    void focusGained (FocusChangeType) override { repaint(); }
+    void focusLost (FocusChangeType) override { repaint(); }
 
 private:
+    juce::Colour background() const;
+    void paintScope (juce::Graphics& g, juce::Rectangle<float> area);
     void paintWaves (juce::Graphics& g, juce::Rectangle<float> area);
     void paintSpectrum (juce::Graphics& g, juce::Rectangle<float> area);
-    void paintScope (juce::Graphics& g, juce::Rectangle<float> area);
+    void paintGuides (juce::Graphics& g, juce::Rectangle<float> area);
     void paintOverlay (juce::Graphics& g);
 
     void captureWave();
     void computeSpectrumColumns();
     void computeScopeColumns();
-    static juce::Colour magma (float t);
 
     double sampleRate = 44100.0;
-    Mode mode = Waves;
-    bool droneOn = false;
-    int droneNote = -1;
+    Mode mode = Scope;
 
-    // кольцевой буфер входа
     static constexpr int kRing = 1 << 15;
     std::vector<float> ringL = std::vector<float> (kRing, 0.0f), ringR = std::vector<float> (kRing, 0.0f);
-    juce::int64 written = 0;
-    juce::int64 spectrumRead = 0, scopeRead = 0;
+    juce::int64 written = 0, spectrumRead = 0, scopeRead = 0;
+
+    // Scope
+    struct Col { float mn = 0, mx = 0, db = -100.0f; };
+    std::deque<Col> scopeCols;
 
     // Waves
     static constexpr int kWavePoints = 220, kWaveLines = 26;
@@ -62,16 +64,9 @@ private:
     juce::dsp::FFT fft { kFftOrder };
     juce::dsp::WindowingFunction<float> window { (size_t) kFftSize, juce::dsp::WindowingFunction<float>::hann };
     std::vector<float> fftBuf = std::vector<float> (kFftSize * 2, 0.0f);
-    std::vector<float> lastSpectrum;   // по пикселям высоты, 0..1
-    std::vector<float> peakSpectrum;
-    juce::Image spectrogram;
+    std::vector<float> columnValues;              // последний столбец, 0..1 по высоте
+    std::deque<std::vector<float>> spectroCols;   // история столбцов (значения, не цвета — тема может смениться)
 
-    // Scope
-    struct ScopeCol { float mn = 0, mx = 0; juce::Colour c; };
-    std::deque<ScopeCol> scopeCols;
-    float lpLow = 0, lpMid = 0, bandState[3] {};
-    std::vector<juce::Point<float>> stereoPts;
-
-    juce::Rectangle<int> pillWaves, pillSpectrum, pillScope, pillDrone;
+    juce::Rectangle<float> tabsArea, legendArea, previewChip;
 };
 } // namespace mist

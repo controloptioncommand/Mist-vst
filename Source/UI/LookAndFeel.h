@@ -4,32 +4,50 @@
 
 namespace mist
 {
-// Все цвета интерфейса в одном месте
-inline juce::String midDot() { return juce::String::fromUTF8 ("  \xc2\xb7  "); }
+inline juce::String midDot() { return juce::String::fromUTF8 (" \xc2\xb7 "); }
 
-// Цвета текущей темы. Меняются целиком через applyTheme() — все компоненты читают их при отрисовке.
+// ---------------------------------------------------------------------------
+// Цвета текущей темы (роли палитры). Меняются целиком через applyTheme().
+// Старые имена (bg, panel, ...) оставлены как псевдонимы ролей.
 namespace Colours
 {
-    inline juce::Colour bg, panel, panelHi, outline, track, text, textDim, accent, accent2, good, danger, vizBg;
-    inline juce::Colour opColours[6];
+    inline juce::Colour window, surface, well, track, ink, ink2, signal, onSignal, carrier, modulator, live, glass;
+    inline juce::Colour outline;                                     // рамка 1 px
+    inline std::array<juce::Colour, 3> carrierRamp, modulatorRamp;   // тихо / основной / пик
+
+    // псевдонимы
+    inline juce::Colour bg, panel, panelHi, text, textDim, accent, accent2, good, danger, vizBg;
+
+    // цвет оператора = цвет его роли (редактор обновляет opRole по маршрутизации)
+    inline std::array<int, 6> opRole {};   // 0 — несущая, 1 — модулятор, 2 — не используется
     juce::Colour forOperator (int op);
+    const std::array<juce::Colour, 3>& rampForOperator (int op);
 }
 
-enum class ThemeId { Light = 0, Dark = 1 };
-struct Theme
-{
-    juce::Colour bg, panel, panelHi, outline, track, text, textDim, accent, good, danger, vizBg;
-    std::array<juce::Colour, 6> ops;
-    float shadowAlpha;
-};
-const Theme& getTheme (ThemeId id);
-void applyTheme (ThemeId id);       // переписывает Colours::*
+enum class ThemeId { Oxygen = 0, Rubber = 1, Light = Oxygen, Dark = Rubber };
+enum class ThemeMode { System = 0, Oxygen = 1, Rubber = 2 };
+
+void applyTheme (ThemeId id);
 ThemeId currentTheme();
+
+// Системные настройки доступности (macOS: «Уменьшить прозрачность», «Уменьшить движение»)
+struct Accessibility
+{
+    static bool reduceTransparency();
+    static bool reduceMotion();
+    static void refresh();
+};
+
+// Цвет громкости: t = clamp((dB + 24) / 24), до 0.55 — тихо→основной, дальше — основной→пик
+juce::Colour rampColour (const std::array<juce::Colour, 3>& ramp, float t);
+int rampBucket (float db);   // 10 корзин
+juce::Colour rampBucketColour (const std::array<juce::Colour, 3>& ramp, int bucket);
 
 class MistLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
     MistLookAndFeel();
+    void refreshColours();
 
     void drawRotarySlider (juce::Graphics&, int x, int y, int w, int h, float pos, float start, float end, juce::Slider&) override;
     void drawLinearSlider (juce::Graphics&, int x, int y, int w, int h, float pos, float minPos, float maxPos,
@@ -47,12 +65,21 @@ public:
     juce::Label* createSliderTextBox (juce::Slider&) override;
     void drawLabel (juce::Graphics&, juce::Label&) override;
 
-    // Шрифты: Medeo Sans — интерфейс, Medeo Mono — цифры/значения, Medeo Pixel — логотип
+    // Типографика: системный шрифт по шкале macOS, числа — системный моноширинный,
+    // Medeo Pixel — только название Mist и логотип.
+    struct Type
+    {
+        static constexpr float largeTitle = 26.0f, title1 = 22.0f, title2 = 17.0f, title3 = 15.0f,
+                               headline = 13.0f, body = 13.0f, callout = 12.0f, subheadline = 11.0f,
+                               footnote = 10.0f, caption = 10.0f;
+    };
     static juce::Font font (float size, bool bold = false);
-    static juce::Font mono (float size, bool medium = false);
+    static juce::Font mono (float size, bool bold = false);
     static juce::Font pixel (float size);
-    juce::Typeface::Ptr getTypefaceForFont (const juce::Font&) override;
-    void refreshColours();   // после applyTheme()
+
     static void drawSwitch (juce::Graphics&, juce::Rectangle<float> r, bool on, juce::Colour onColour);
+    // Стекло — только функциональный слой (тулбар, чипы, вкладки вида, легенда, кнопка закрытия)
+    static void drawGlass (juce::Graphics&, juce::Rectangle<float> r, float radius);
+    static void drawFocusRing (juce::Graphics&, juce::Rectangle<float> r, float radius);
 };
 } // namespace mist

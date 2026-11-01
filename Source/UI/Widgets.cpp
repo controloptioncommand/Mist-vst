@@ -10,18 +10,20 @@ ParamKnob::ParamKnob (const juce::String& text, juce::Colour accent)
     slider.getProperties().set ("accent", accent == Colours::accent ? juce::String ("accent") : accent.toString());
     slider.setDoubleClickReturnValue (true, 0.0);
     slider.setMouseDragSensitivity (220);
+    slider.setWantsKeyboardFocus (true);
+    slider.setTitle (text);
     slider.onValueChange = [this] { updateValue(); };
     addAndMakeVisible (slider);
 
     label.setText (text, juce::dontSendNotification);
     label.setJustificationType (juce::Justification::centred);
-    label.setFont (MistLookAndFeel::font (11.5f, true));
+    label.setFont (MistLookAndFeel::font (MistLookAndFeel::Type::subheadline, true));
     styleLabel (label, false);
     label.setInterceptsMouseClicks (false, false);
     addAndMakeVisible (label);
 
     value.setJustificationType (juce::Justification::centred);
-    value.setFont (MistLookAndFeel::mono (10.5f));
+    value.setFont (MistLookAndFeel::mono (MistLookAndFeel::Type::footnote));
     styleLabel (value, true);
     value.setInterceptsMouseClicks (false, false);
     addAndMakeVisible (value);
@@ -36,6 +38,11 @@ void ParamKnob::attach (APVTS& state, const juce::String& id)
 {
     attachment.reset();
     attachment = std::make_unique<APVTS::SliderAttachment> (state, id, slider);
+    if (auto* p = state.getParameter (id))
+    {
+        slider.setTitle (p->getName (64));
+        slider.setDescription (label.getText());
+    }
     if (auto* p = state.getParameter (id))
         slider.setDoubleClickReturnValue (true, p->convertFrom0to1 (p->getDefaultValue()));
     updateValue();
@@ -62,7 +69,7 @@ ParamChoice::ParamChoice (const juce::String& text)
     if (text.isNotEmpty())
     {
         label.setText (text, juce::dontSendNotification);
-        label.setFont (MistLookAndFeel::font (11.0f, true));
+        label.setFont (MistLookAndFeel::font (MistLookAndFeel::Type::subheadline, true));
         styleLabel (label, true);
         label.setJustificationType (juce::Justification::centredLeft);
         addAndMakeVisible (label);
@@ -75,6 +82,7 @@ void ParamChoice::attach (APVTS& state, const juce::String& id)
     box.clear (juce::dontSendNotification);
     if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (state.getParameter (id)))
         box.addItemList (p->choices, 1);
+    if (auto* p = state.getParameter (id)) box.setTitle (p->getName (64));
     attachment = std::make_unique<APVTS::ComboBoxAttachment> (state, id, box);
 }
 
@@ -88,12 +96,7 @@ void ParamChoice::resized()
 
 void drawCard (juce::Graphics& g, juce::Rectangle<float> r, float radius, bool shadow)
 {
-    if (shadow)
-    {
-        juce::Path p;
-        p.addRoundedRectangle (r, radius);
-        juce::DropShadow (juce::Colours::black.withAlpha (0.06f), 10, { 0, 2 }).drawForPath (g, p);
-    }
+    juce::ignoreUnused (shadow);   // теней нет: плотная поверхность + рамка 1 px
     g.setColour (Colours::panel);
     g.fillRoundedRectangle (r, radius);
     g.setColour (Colours::outline);
@@ -105,7 +108,7 @@ void Section::paint (juce::Graphics& g)
     if (flat) return;
     drawCard (g, getLocalBounds().toFloat(), 10.0f, false);
     g.setColour (Colours::text);
-    g.setFont (MistLookAndFeel::font (12.5f, true));
+    g.setFont (MistLookAndFeel::font (MistLookAndFeel::Type::headline, true));
     g.drawText (title, juce::Rectangle<int> (12, 7, getWidth() - 24, 18), juce::Justification::centredLeft);
 }
 

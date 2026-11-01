@@ -48,125 +48,171 @@ SampleSlot::SampleSlot (MistProcessor& p, int o, std::function<void (int)> sel)
     : proc (p), op (o), onSelect (std::move (sel))
 {
     reverse.setClickingTogglesState (true);
+    reverse.getProperties().set ("chipH", 22.0);
+    reverse.setTitle ("Reverse, Op " + juce::String (op + 1));
     reverseAttachment = std::make_unique<APVTS::ButtonAttachment> (proc.apvts, opId (op, "reverse"), reverse);
-    addAndMakeVisible (reverse);
+    addChildComponent (reverse);
+    setWantsKeyboardFocus (true);
+    setTitle ("Op " + juce::String (op + 1));
 }
 
 float SampleSlot::param (const char* name) const { return getParam (proc, opId (op, name)); }
 
+bool SampleSlot::hasSample() const { return proc.getSample (op) != nullptr; }
+
 void SampleSlot::refresh()
 {
     const auto role = operatorRole (proc, op);
-    if (role != cachedRole) { cachedRole = role; }
+    const bool filled = hasSample();
+    if (role != cachedRole || filled != reverse.isVisible())
+    {
+        cachedRole = role;
+        reverse.setVisible (filled);
+        resized();
+    }
+    auto asset = proc.getSample (op);
+    setDescription ("Op " + juce::String (op + 1) + ", " + cachedRole + ", "
+                    + (asset ? "sample " + asset->name : juce::String ("no sample, drop an audio file here")));
     repaint();
 }
 
 void SampleSlot::paint (juce::Graphics& g)
 {
+    using LnF = MistLookAndFeel;
     auto r = getLocalBounds().toFloat();
-    const auto col = Colours::forOperator (op);
+    const float radius = 12.0f, pad = 12.0f;
     const bool isOn = param ("on") > 0.5f;
+    const auto roleCol = isOn ? Colours::forOperator (op) : Colours::ink2;
 
-    g.setColour (selected ? Colours::panel : Colours::panelHi);
-    g.fillRoundedRectangle (r.reduced (0.5f), 10.0f);
-    g.setColour (selected ? col.withAlpha (0.7f) : Colours::outline);
-    g.drawRoundedRectangle (r.reduced (0.5f), 10.0f, selected ? 1.5f : 1.0f);
+    // карточка плотная, без стекла и теней
+    g.setColour (Colours::surface);
+    g.fillRoundedRectangle (r, radius);
+    g.setColour (selected ? Colours::ink2 : Colours::outline);
+    g.drawRoundedRectangle (r.reduced (0.5f), radius, 1.0f);
 
     auto asset = proc.getSample (op);
-    auto content = getLocalBounds().reduced (12, 8);
+    auto content = getLocalBounds().reduced ((int) pad, 8);
 
-    // заголовок: ● Op 1 · Carrier                 file.wav
-    auto top = content.removeFromTop (16);
-    powerArea = top.removeFromLeft (14);
-    g.setColour (isOn ? col : Colours::textDim.withAlpha (0.5f));
-    g.fillEllipse (powerArea.toFloat().withSizeKeepingCentre (8, 8));
-    g.setColour (isOn ? Colours::text : Colours::textDim);
-    g.setFont (MistLookAndFeel::font (12.0f, true));
-    const juce::String title = "Op " + juce::String (op + 1) + midDot() + cachedRole;
-    g.drawText (title, top.removeFromLeft (130), juce::Justification::centredLeft);
-    g.setFont (MistLookAndFeel::mono (10.5f));
-    g.setColour (Colours::textDim);
+    // ● Op 1 · Carrier                    имя файла
+    auto top = content.removeFromTop (18);
+    powerArea = top.removeFromLeft (14).expanded (6, 6);
+    g.setColour (roleCol);
+    g.fillEllipse (juce::Rectangle<float> (8.0f, 8.0f).withCentre ({ (float) top.getX() - 7.0f, (float) top.getCentreY() }));
+    g.setFont (LnF::font (LnF::Type::callout, true));
+    const juce::String opText = "Op " + juce::String (op + 1) + midDot();
+    const int opW = juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), opText);
+    g.setColour (isOn ? Colours::ink : Colours::ink2);
+    g.drawText (opText, top.removeFromLeft (opW + 1), juce::Justification::centredLeft);
+    g.setColour (roleCol);
+    const int roleW = juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), cachedRole) + 4;
+    g.drawText (cachedRole, top.removeFromLeft (roleW), juce::Justification::centredLeft);
+    g.setFont (LnF::font (LnF::Type::subheadline));
+    g.setColour (Colours::ink2);
     const int mode = (int) param ("mode");
     g.drawText (asset ? asset->name : juce::String ("no sample"), top, juce::Justification::centredRight, true);
 
-    // волна: вертикальные «штрихи», как в макете
-    content.removeFromTop (5);
-    auto bottom = content.removeFromBottom (18);
-    waveArea = content;
-    auto wa = waveArea.toFloat();
-    const float mid = wa.getCentreY(), hh = wa.getHeight() * 0.5f;
-    const auto waveCol = isOn ? col : Colours::textDim;
-    if (asset != nullptr && ! asset->overview.empty())
+    if (asset == nullptr)
     {
-        const int bins = (int) asset->overview.size() / 2;
-        const int bars = juce::jmax (8, (int) wa.getWidth() / 3);
-        const float st = param ("start");
-        for (int i = 0; i < bars; ++i)
-        {
-            const int b0 = i * bins / bars, b1 = juce::jmax (b0 + 1, (i + 1) * bins / bars);
-            float pk = 0;
-            for (int b = b0; b < b1; ++b)
-                pk = juce::jmax (pk, -asset->overview[(size_t) b * 2], asset->overview[(size_t) b * 2 + 1]);
-            const float x = wa.getX() + (float) i * wa.getWidth() / (float) bars;
-            const float h = juce::jmax (1.0f, pk * hh);
-            const bool before = (float) i / (float) bars < st;
-            g.setColour (waveCol.withAlpha (before ? 0.25f : 0.9f));
-            g.fillRoundedRectangle (x, mid - h, 1.6f, h * 2.0f, 0.8f);
-        }
+        // пустая карточка: Scrub · built-in · ×1.00          Drop a sample
+        auto row = content.removeFromTop (16);
+        waveArea = getLocalBounds();
+        g.setFont (LnF::mono (LnF::Type::footnote));
+        g.setColour (Colours::ink2);
+        const float ratio = coarseToRatio ((int) param ("coarse")) * (1.0f + param ("fine"));
+        g.drawText (modeName (mode) + midDot() + "built-in" + midDot() + juce::String::fromUTF8 ("\xc3\x97") + juce::String (ratio, 2),
+                    row, juce::Justification::centredLeft);
+        g.setFont (LnF::font (LnF::Type::subheadline));
+        g.drawText (dragOver ? "Release to load" : "Drop a sample", row, juce::Justification::centredRight);
     }
     else
     {
-        // нет семпла: пунктирная рамка-приглашение и встроенная волна
-        g.setColour (Colours::outline.darker (0.1f));
-        juce::Path border;
-        border.addRoundedRectangle (wa.reduced (0.5f), 6.0f);
-        juce::Path dashed;
-        const float dashes[] = { 4.0f, 3.0f };
-        juce::PathStrokeType (1.0f).createDashedStroke (dashed, border, dashes, 2);
-        g.fillPath (dashed);
-        const auto& t = Wavetable::getBasic();
-        juce::Path p;
-        const int W = juce::jmax (2, (int) wa.getWidth() / 2);
-        for (int x = 0; x < W; ++x)
-        {
-            const float v = t.read ((double) x / (W - 1) * 0.999, param ("scan"), 0);
-            const float px = wa.getX() + (float) x * wa.getWidth() / (float) (W - 1);
-            const float py = mid - v * hh * 0.6f;
-            if (x == 0) p.startNewSubPath (px, py); else p.lineTo (px, py);
-        }
-        g.setColour (waveCol.withAlpha (0.35f));
-        g.strokePath (p, juce::PathStrokeType (1.2f));
-        g.setColour (Colours::textDim);
-        g.setFont (MistLookAndFeel::font (10.5f));
-        g.drawText (dragOver ? "Release to load" : "Drop a sample", wa, juce::Justification::centred);
-    }
+        content.removeFromTop (4);
+        auto bottom = content.removeFromBottom (28);
+        waveArea = content;
+        auto wa = waveArea.toFloat();
+        // колодец: радиус = радиус карточки − отступ
+        g.setColour (Colours::well);
+        g.fillRoundedRectangle (wa, juce::jmax (2.0f, radius - pad));
 
-    // низ: Start / Length
-    g.setColour (Colours::textDim);
-    g.setFont (MistLookAndFeel::mono (10.0f));
-    juce::String info;
-    if (asset)
-    {
+        auto plot = wa.reduced (6.0f, 4.0f).withTrimmedRight (28.0f);
+        const float mid = plot.getCentreY(), hh = plot.getHeight() * 0.5f;
+        const float dashes[] = { 2.0f, 3.0f };
+        g.setFont (LnF::mono (LnF::Type::caption));
+        for (float db : { -6.0f, -12.0f })
+        {
+            const float a = juce::Decibels::decibelsToGain (db) * hh;
+            g.setColour (Colours::ink2.withAlpha (0.4f));
+            g.drawDashedLine ({ plot.getX(), mid - a, plot.getRight(), mid - a }, dashes, 2, 1.0f);
+            g.drawDashedLine ({ plot.getX(), mid + a, plot.getRight(), mid + a }, dashes, 2, 1.0f);
+        }
+        g.setColour (Colours::ink2);
+        auto lab = wa.withTrimmedLeft (wa.getWidth() - 32.0f).reduced (2.0f, 2.0f);
+        auto labelAt = [&] (const juce::String& t, float y)
+        {
+            g.drawText (t, juce::Rectangle<float> (lab.getX(), y - 5.5f, lab.getWidth(), 11.0f), juce::Justification::centredRight);
+        };
+        labelAt ("0 dB", juce::jmax (lab.getY() + 5.5f, mid - hh));
+        labelAt (juce::String::fromUTF8 ("\xe2\x88\x92" "6"), mid - juce::Decibels::decibelsToGain (-6.0f) * hh);
+        labelAt (juce::String::fromUTF8 ("\xe2\x88\x92" "12"), mid - juce::Decibels::decibelsToGain (-12.0f) * hh);
+
+        // плотная волна: полоска на каждую колонку пикселей, цвет по громкости, 10 корзин
+        const int bins = (int) asset->overview.size() / 2;
+        const int W = juce::jmax (1, (int) plot.getWidth());
+        juce::RectangleList<float> buckets[10];
+        for (int x = 0; x < W && bins > 0; ++x)
+        {
+            const int b0 = x * bins / W, b1 = juce::jmax (b0 + 1, (x + 1) * bins / W);
+            float mn = 0, mx = 0;
+            for (int b = b0; b < juce::jmin (b1, bins); ++b)
+            {
+                mn = juce::jmin (mn, asset->overview[(size_t) b * 2]);
+                mx = juce::jmax (mx, asset->overview[(size_t) b * 2 + 1]);
+            }
+            const float pk = juce::jmax (-mn, mx);
+            const float y0 = mid - mx * hh, y1 = mid - mn * hh;
+            buckets[rampBucket (juce::Decibels::gainToDecibels (pk, -100.0f))]
+                .addWithoutMerging ({ plot.getX() + (float) x, y0, 1.0f, juce::jmax (1.0f, y1 - y0) });
+        }
+        const auto& ramp = Colours::rampForOperator (op);
+        for (int b = 0; b < 10; ++b)
+        {
+            if (buckets[b].isEmpty()) continue;
+            g.setColour (isOn ? rampBucketColour (ramp, b) : Colours::ink2);
+            g.fillRectList (buckets[b]);
+        }
+
+        // Start / Length
         const double secs = (double) asset->length / asset->fileSampleRate;
-        info << "Start " << juce::String (param ("start") * secs, 2) << " s     Length " << juce::String (secs, 2) << " s";
+        g.setFont (LnF::mono (LnF::Type::footnote));
+        g.setColour (Colours::ink2);
+        g.drawText ("Start " + juce::String (param ("start") * secs, 2) + " s   Length " + juce::String (secs, 2) + " s",
+                    bottom.withTrimmedRight (80), juce::Justification::centredLeft);
     }
-    else
-        info << modeName (mode) << midDot() << "built-in" << midDot() << "x" << juce::String (coarseToRatio ((int) param ("coarse")) * (1.0f + param ("fine")), 2);
-    g.drawText (info, bottom.withTrimmedRight (70), juce::Justification::centredLeft);
 
     if (dragOver)
     {
-        g.setColour (col.withAlpha (0.10f));
-        g.fillRoundedRectangle (r, 10.0f);
-        g.setColour (col);
-        g.drawRoundedRectangle (r.reduced (1.0f), 10.0f, 2.0f);
+        g.setColour (Colours::signal);
+        g.drawRoundedRectangle (r.reduced (1.0f), radius - 1.0f, 2.0f);
     }
+    if (hasKeyboardFocus (false))
+        LnF::drawFocusRing (g, r, radius);
 }
 
 void SampleSlot::resized()
 {
     auto r = getLocalBounds().reduced (12, 8);
-    reverse.setBounds (r.removeFromBottom (18).removeFromRight (62));
+    reverse.setBounds (r.removeFromBottom (28).removeFromRight (76));
+}
+
+bool SampleSlot::keyPressed (const juce::KeyPress& k)
+{
+    if (k == juce::KeyPress::returnKey || k == juce::KeyPress::spaceKey)
+    {
+        if (onSelect) onSelect (op);
+        if (! hasSample()) openFileChooser();
+        return true;
+    }
+    return false;
 }
 
 void SampleSlot::mouseDown (const juce::MouseEvent& e)
@@ -251,7 +297,7 @@ float WaveView::param (const char* name) const { return getParam (proc, opId (op
 void WaveView::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat();
-    g.setColour (Colours::panelHi);
+    g.setColour (Colours::well);
     g.fillRoundedRectangle (r, 8.0f);
     const auto col = Colours::forOperator (opIndex);
     auto asset = proc.getSample (opIndex);
@@ -298,26 +344,30 @@ void WaveView::paint (juce::Graphics& g)
     {
         const Wavetable& t = asset ? asset->table : Wavetable::getBasic();
         const float scanV = param ("scan");
-        // несколько соседних кадров «веером» + текущий
-        for (int k = 3; k >= 0; --k)
+        // призрачные следы прошлых положений Position
+        if (ghosts.empty() || std::abs (ghosts.back() - scanV) > 0.004f)
         {
-            const float sv = juce::jlimit (0.0f, 1.0f, scanV - 0.06f * (float) k);
+            ghosts.push_back (scanV);
+            while (ghosts.size() > 5) ghosts.pop_front();
+        }
+        const int W = juce::jmax (2, (int) inner.getWidth());
+        for (size_t k = 0; k < ghosts.size(); ++k)
+        {
+            const bool current = k + 1 == ghosts.size();
             juce::Path p;
-            const int W = juce::jmax (2, (int) inner.getWidth());
-            const float off = (float) k * 6.0f;
             for (int x = 0; x < W; ++x)
             {
-                const float v = t.read ((double) x / (W - 1) * 0.999, sv, 0);
-                const float y = inner.getCentreY() - off - v * inner.getHeight() * 0.40f;
-                if (x == 0) p.startNewSubPath (inner.getX() + (float) x + off, y); else p.lineTo (inner.getX() + (float) x + off * (1.0f - (float) x / W), y);
+                const float v = t.read ((double) x / (W - 1) * 0.999, ghosts[k], 0);
+                const float y = inner.getCentreY() - v * inner.getHeight() * 0.42f;
+                if (x == 0) p.startNewSubPath (inner.getX() + (float) x, y); else p.lineTo (inner.getX() + (float) x, y);
             }
-            g.setColour (k == 0 ? col : col.withAlpha (0.18f));
-            g.strokePath (p, juce::PathStrokeType (k == 0 ? 2.0f : 1.0f));
+            g.setColour (current ? col : col.withAlpha (0.12f + 0.06f * (float) k));
+            g.strokePath (p, juce::PathStrokeType (current ? 2.0f : 1.0f));
         }
     }
 
-    g.setColour (Colours::textDim);
-    g.setFont (MistLookAndFeel::font (10.0f));
+    g.setColour (Colours::ink2);
+    g.setFont (MistLookAndFeel::font (MistLookAndFeel::Type::footnote));
     const juce::String hint = asset == nullptr ? "built-in table" + midDot() + "drop a sample on the slot"
                             : mode == OpModeSample ? "drag markers: start / loop" : mode == OpModeGrain ? "drag: position" : "";
     g.drawText (hint, r.reduced (8, 4), juce::Justification::bottomRight);
@@ -394,6 +444,7 @@ void OperatorPage::setOperator (int newOp)
     on.attach (s, opId (op, "on"));              fixed.attach (s, opId (op, "fixed"));
     keytrack.attach (s, opId (op, "keytrack"));  loopMode.attach (s, opId (op, "loopMode"));
     for (auto* k : allKnobs()) k->slider.getProperties().set ("accent", "accent");
+    for (auto* t : { &on, &fixed, &keytrack }) t->getProperties().set ("accent", "live");
     wave.setOperator (op);
     shownMode = -1;
     refresh();

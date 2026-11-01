@@ -2,132 +2,237 @@
 
 namespace mist
 {
+using LnF = MistLookAndFeel;
+
 // ===========================================================================
+Segmented::Segmented()
+{
+    setWantsKeyboardFocus (true);
+}
+
 void Segmented::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat();
-    g.setColour (Colours::panelHi.darker (0.03f));
-    g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
+    const float rad = r.getHeight() * 0.5f;
+    g.setColour (Colours::well);
+    g.fillRoundedRectangle (r, rad);
+    g.setColour (Colours::outline);
+    g.drawRoundedRectangle (r.reduced (0.5f), rad, 1.0f);
     if (items.empty()) return;
-    const float w = (r.getWidth() - 4.0f) / (float) items.size();
+    const float inset = 2.0f;
+    const float w = (r.getWidth() - inset * 2) / (float) items.size();
     for (size_t i = 0; i < items.size(); ++i)
     {
-        auto cell = juce::Rectangle<float> (r.getX() + 2.0f + w * (float) i, r.getY() + 2.0f, w, r.getHeight() - 4.0f);
+        // концентрично: радиус сегмента = радиус дорожки − отступ
+        auto cell = juce::Rectangle<float> (r.getX() + inset + w * (float) i, r.getY() + inset, w, r.getHeight() - inset * 2);
         const bool sel = items[i].value == selected;
         if (sel)
         {
-            juce::Path p;
-            p.addRoundedRectangle (cell, cell.getHeight() * 0.5f);
-            juce::DropShadow (juce::Colours::black.withAlpha (0.12f), 4, { 0, 1 }).drawForPath (g, p);
-            g.setColour (Colours::panel);
-            g.fillPath (p);
+            g.setColour (Colours::surface);
+            g.fillRoundedRectangle (cell, rad - inset);
+            g.setColour (Colours::outline);
+            g.drawRoundedRectangle (cell.reduced (0.5f), rad - inset, 1.0f);
         }
-        g.setColour (sel ? Colours::text : Colours::textDim);
-        g.setFont (MistLookAndFeel::font (12.0f, sel));
+        g.setColour (sel ? Colours::ink : Colours::ink2);
+        g.setFont (LnF::font (LnF::Type::callout, sel));
         g.drawText (items[i].text, cell, juce::Justification::centred);
     }
+    if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, r, rad);
+}
+
+void Segmented::choose (int i)
+{
+    if (items.empty()) return;
+    i = juce::jlimit (0, (int) items.size() - 1, i);
+    selected = items[(size_t) i].value;
+    repaint();
+    if (onChange) onChange (selected);
 }
 
 void Segmented::mouseDown (const juce::MouseEvent& e)
 {
-    if (items.empty()) return;
-    const int i = juce::jlimit (0, (int) items.size() - 1, (int) ((float) e.x / (float) getWidth() * (float) items.size()));
-    selected = items[(size_t) i].value;
-    repaint();
-    if (onChange) onChange (selected);
+    choose ((int) ((float) e.x / (float) getWidth() * (float) items.size()));
+}
+
+bool Segmented::keyPressed (const juce::KeyPress& k)
+{
+    int cur = 0;
+    for (size_t i = 0; i < items.size(); ++i) if (items[i].value == selected) cur = (int) i;
+    if (k.getKeyCode() == juce::KeyPress::leftKey)  { choose (cur - 1); return true; }
+    if (k.getKeyCode() == juce::KeyPress::rightKey) { choose (cur + 1); return true; }
+    return false;
 }
 
 // ===========================================================================
 PillChoice::PillChoice (APVTS& s, const juce::String& id, const juce::String& cap)
     : param (s.getParameter (id)), caption (cap)
 {
-    attachment = std::make_unique<juce::ParameterAttachment> (*param, [this] (float v) { index = (int) v; repaint(); }, nullptr);
+    setWantsKeyboardFocus (true);
+    setTitle (cap);
+    attachment = std::make_unique<juce::ParameterAttachment> (*param, [this] (float v)
+    {
+        index = (int) v;
+        setDescription (caption + " " + param->getCurrentValueAsText());
+        repaint();
+    }, nullptr);
     attachment->sendInitialUpdate();
 }
 
 void PillChoice::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat().reduced (0.5f);
-    g.setColour (Colours::panelHi);
-    g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
+    const float rad = r.getHeight() * 0.5f;
+    g.setColour (Colours::well);
+    g.fillRoundedRectangle (r, rad);
     g.setColour (Colours::outline);
-    g.drawRoundedRectangle (r, r.getHeight() * 0.5f, 1.0f);
+    g.drawRoundedRectangle (r, rad, 1.0f);
     auto t = getLocalBounds().reduced (12, 0);
-    g.setFont (MistLookAndFeel::font (11.5f));
-    g.setColour (Colours::textDim);
+    g.setFont (LnF::font (LnF::Type::callout));
+    g.setColour (Colours::ink2);
     const int cw = juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), caption);
     g.drawText (caption, t.removeFromLeft (cw + 6), juce::Justification::centredLeft);
-    g.setColour (Colours::text);
-    g.setFont (MistLookAndFeel::font (11.5f, true));
-    g.drawText (param->getCurrentValueAsText(), t.withTrimmedRight (14), juce::Justification::centredLeft);
+    g.setColour (Colours::ink);
+    auto valueText = param->getCurrentValueAsText().replace ("x", juce::String::fromUTF8 ("\xc3\x97"));
+    g.setFont (LnF::font (LnF::Type::callout, true));
+    g.drawText (valueText, t.withTrimmedRight (14), juce::Justification::centredLeft);
     juce::Path arrow;
     const float ax = (float) getWidth() - 16.0f, ay = (float) getHeight() * 0.5f;
     arrow.startNewSubPath (ax - 3, ay - 1.5f); arrow.lineTo (ax, ay + 1.5f); arrow.lineTo (ax + 3, ay - 1.5f);
     g.strokePath (arrow, juce::PathStrokeType (1.3f));
+    if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, r, rad);
 }
 
-void PillChoice::mouseDown (const juce::MouseEvent&)
+void PillChoice::openMenu()
 {
     auto* choice = dynamic_cast<juce::AudioParameterChoice*> (param);
     if (choice == nullptr) return;
     juce::PopupMenu m;
     for (int i = 0; i < choice->choices.size(); ++i)
-        m.addItem (i + 1, choice->choices[i], true, i == index);
+        m.addItem (i + 1, choice->choices[i].replace ("x", juce::String::fromUTF8 ("\xc3\x97")), true, i == index);
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this), [this] (int r)
     {
         if (r > 0) attachment->setValueAsCompleteGesture ((float) (r - 1));
     });
 }
 
+bool PillChoice::keyPressed (const juce::KeyPress& k)
+{
+    if (k == juce::KeyPress::returnKey || k == juce::KeyPress::spaceKey) { openMenu(); return true; }
+    return false;
+}
+
 // ===========================================================================
+void OutMeter::setLevel (float peak)
+{
+    level = peak;
+    const float db = juce::Decibels::gainToDecibels (level, -60.0f);
+    setDescription ("Output peak " + (level > 0.001f ? juce::String (db, 1) + " dB" : juce::String ("silent")));
+    repaint();
+}
+
 void OutMeter::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds();
-    g.setFont (MistLookAndFeel::mono (10.5f));
-    g.setColour (Colours::textDim);
+    g.setFont (LnF::font (LnF::Type::subheadline));
+    g.setColour (Colours::ink2);
     g.drawText ("Out", r.removeFromLeft (28), juce::Justification::centredLeft);
     const float db = juce::Decibels::gainToDecibels (level, -60.0f);
-    auto txt = r.removeFromRight (46);
-    g.drawText (level > 0.001f ? juce::String (db, 1) + " dB" : juce::String ("-inf"), txt, juce::Justification::centredRight);
+    auto txt = r.removeFromRight (52);
+    g.setFont (LnF::mono (LnF::Type::footnote));
+    g.setColour (Colours::ink);
+    g.drawText (level > 0.001f ? juce::String (juce::roundToInt (db)).replace ("-", juce::String::fromUTF8 ("\xe2\x88\x92")) + " dB"
+                               : juce::String::fromUTF8 ("\xe2\x88\x92\xe2\x88\x9e"), txt, juce::Justification::centredRight);
     auto bar = r.reduced (2, 0).toFloat().withSizeKeepingCentre ((float) r.getWidth() - 4.0f, 5.0f);
     g.setColour (Colours::track);
     g.fillRoundedRectangle (bar, 2.5f);
     const float t = juce::jlimit (0.0f, 1.0f, (db + 60.0f) / 60.0f);
-    g.setColour (db > -1.0f ? Colours::danger : db > -6.0f ? juce::Colour (0xffffb020) : Colours::good);
+    g.setColour (db > -1.0f ? Colours::signal : Colours::live);
     g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * t), 2.5f);
 }
 
 // ===========================================================================
+void LogoButton::paintButton (juce::Graphics& g, bool over, bool)
+{
+    g.setColour (over ? Colours::ink.withAlpha (0.75f) : Colours::ink);
+    g.setFont (LnF::pixel (24.0f));
+    g.drawText ("Mist", getLocalBounds(), juce::Justification::centred);
+    if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, getLocalBounds().toFloat(), 8.0f);
+}
+
+void IconButton::paintButton (juce::Graphics& g, bool over, bool down)
+{
+    auto r = getLocalBounds().toFloat();
+    if (over || down)
+    {
+        g.setColour (Colours::ink.withAlpha (down ? 0.10f : 0.05f));
+        g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
+    }
+    g.setColour (Colours::ink);
+    const auto c = r.getCentre();
+    if (kind == Settings)
+    {
+        auto ir = juce::Rectangle<float> (16.0f, 11.0f).withCentre (c);
+        for (int i = 0; i < 2; ++i)
+        {
+            const float y = ir.getY() + (float) i * ir.getHeight();
+            g.drawLine (ir.getX(), y, ir.getRight(), y, 1.4f);
+            const float kx = i == 0 ? ir.getX() + 5.0f : ir.getRight() - 5.0f;
+            g.setColour (Colours::surface);
+            g.fillEllipse (kx - 2.6f, y - 2.6f, 5.2f, 5.2f);
+            g.setColour (Colours::ink);
+            g.drawEllipse (kx - 2.6f, y - 2.6f, 5.2f, 5.2f, 1.3f);
+        }
+    }
+    else
+    {
+        const float d = kind == Prev ? 1.0f : -1.0f;
+        juce::Path p;
+        p.startNewSubPath (c.x + 2.5f * d, c.y - 5.0f);
+        p.lineTo (c.x - 2.5f * d, c.y);
+        p.lineTo (c.x + 2.5f * d, c.y + 5.0f);
+        g.strokePath (p, juce::PathStrokeType (1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    }
+    if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, r, r.getHeight() * 0.5f);
+}
+
+// ===========================================================================
+static std::unique_ptr<juce::PropertiesFile> openPrefs()
+{
+    juce::PropertiesFile::Options o;
+    o.applicationName = "Mist";
+    o.filenameSuffix = "settings";
+    o.folderName = "Mist";
+    o.osxLibrarySubFolder = "Application Support";
+    return std::make_unique<juce::PropertiesFile> (o);
+}
+
 MistEditor::MistEditor (MistProcessor& p)
     : AudioProcessorEditor (&p), proc (p),
       opPage (p), envPage (p), routing (p), voicePage (p), filterPage (p), lfo1 (p, 0), lfo2 (p, 1), modPage (p),
       interp (p.apvts, "interp", "Interpolation"), oversampling (p.apvts, "oversampling", "Oversampling")
 {
-    applyTheme (loadSavedTheme());
-    lnf.refreshColours();
+    Accessibility::refresh();
+    themeMode = (ThemeMode) juce::jlimit (0, 2, openPrefs()->getIntValue ("themeMode", 0));
+    applyThemeMode();
     setLookAndFeel (&lnf);
+    juce::Desktop::getInstance().addDarkModeSettingListener (this);
     addAndMakeVisible (content);
 
-    // шапка
-    for (juce::Component* c : std::initializer_list<juce::Component*> { &prevPreset, &nextPreset, &presetName, &settingsButton, &modeSwitch, &outMeter })
+    // тулбар
+    for (juce::Component* c : std::initializer_list<juce::Component*> { &logo, &prevPreset, &presetName, &nextPreset, &modeSwitch, &outMeter, &settingsButton })
         content.addAndMakeVisible (c);
-    for (auto* b : { &prevPreset, &nextPreset, &presetName, &settingsButton })
-        b->getProperties().set ("noOutline", true);
+    presetName.getProperties().set ("noOutline", true);
+    presetName.setTitle ("Preset");
+    logo.onClick = [this] { showAbout (true); };
     prevPreset.onClick = [this] { proc.presets.loadNext (-1); };
     nextPreset.onClick = [this] { proc.presets.loadNext (1); };
     presetName.onClick = [this] { showPresetMenu(); };
     settingsButton.onClick = [this] { showSettingsMenu(); };
+    modeSwitch.setTitle ("Operator mode");
     modeSwitch.setItems ({ { "Sample PM", OpModeSample }, { "Scrub", OpModeWave }, { "Grain", OpModeGrain } });
     modeSwitch.onChange = [this] (int v) { setParam (opId (selectedOp, "mode"), (float) v); };
 
     content.addAndMakeVisible (viz);
-    viz.onDroneClicked = [this]
-    {
-        auto* d = proc.apvts.getParameter ("drone");
-        d->beginChangeGesture();
-        d->setValueNotifyingHost (d->getValue() > 0.5f ? 0.0f : 1.0f);
-        d->endChangeGesture();
-    };
 
     for (int i = 0; i < kNumOps; ++i)
     {
@@ -135,7 +240,7 @@ MistEditor::MistEditor (MistProcessor& p)
         content.addAndMakeVisible (*slots.back());
     }
 
-    // вкладки
+    tabs.setTitle ("Operator panel tabs");
     tabs.setItems ({ { "Operator", 0 }, { "Envelope", 1 }, { "Routing", 2 }, { "Voice", 3 }, { "Filter", 4 }, { "LFO", 5 }, { "Mod Matrix", 6 } });
     tabs.onChange = [this] (int v) { showPage (v); };
     content.addAndMakeVisible (tabs);
@@ -149,15 +254,18 @@ MistEditor::MistEditor (MistProcessor& p)
     for (auto* pg : pages) content.addChildComponent (pg);
     routing.diagram.onOperatorClicked = [this] (int op) { selectOperator (op); };
 
-    // низ
     drone.attach (proc.apvts, "drone");
-    drone.getProperties().set ("accent", "good");
-    cpuLabel.setFont (MistLookAndFeel::mono (10.5f));
-    styleLabel (cpuLabel, true);
-    cpuLabel.setJustificationType (juce::Justification::centredRight);
-    for (juce::Component* c : std::initializer_list<juce::Component*> { &drone, &interp, &oversampling, &cpuLabel })
+    drone.getProperties().set ("accent", "live");
+    statusLabel.setFont (LnF::mono (LnF::Type::footnote));
+    styleLabel (statusLabel, true);
+    statusLabel.setJustificationType (juce::Justification::centredRight);
+    for (juce::Component* c : std::initializer_list<juce::Component*> { &drone, &interp, &oversampling, &statusLabel })
         content.addAndMakeVisible (c);
 
+    content.addChildComponent (about);
+    about.onClose = [this] { showAbout (false); };
+
+    updateRoles();
     selectOperator (0);
     showPage (0);
 
@@ -172,6 +280,7 @@ MistEditor::MistEditor (MistProcessor& p)
 MistEditor::~MistEditor()
 {
     stopTimer();
+    juce::Desktop::getInstance().removeDarkModeSettingListener (this);
     setLookAndFeel (nullptr);
 }
 
@@ -182,6 +291,48 @@ void MistEditor::setParam (const juce::String& id, float realValue)
         p->beginChangeGesture();
         p->setValueNotifyingHost (p->convertTo0to1 (realValue));
         p->endChangeGesture();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Тема: по системе (светлая/тёмная macOS) или вручную
+void MistEditor::applyThemeMode()
+{
+    ThemeId id = ThemeId::Oxygen;
+    if (themeMode == ThemeMode::Rubber) id = ThemeId::Rubber;
+    else if (themeMode == ThemeMode::System) id = juce::Desktop::getInstance().isDarkModeActive() ? ThemeId::Rubber : ThemeId::Oxygen;
+    applyTheme (id);
+    lnf.refreshColours();
+    restyleTree (*this);
+    sendLookAndFeelChange();
+    repaint();
+}
+
+void MistEditor::setThemeMode (ThemeMode m)
+{
+    themeMode = m;
+    if (auto p = openPrefs()) { p->setValue ("themeMode", (int) m); p->saveIfNeeded(); }
+    applyThemeMode();
+}
+
+void MistEditor::darkModeSettingChanged()
+{
+    if (themeMode == ThemeMode::System) applyThemeMode();
+}
+
+// ---------------------------------------------------------------------------
+void MistEditor::updateRoles()
+{
+    const auto r = Routing::read (proc);
+    for (int i = 0; i < kNumOps; ++i)
+    {
+        int role = 2;
+        if (r.on[i])
+        {
+            if (r.out[i] > 0.0f) role = 0;
+            else for (int d = 0; d < kNumOps; ++d) if (r.mod[i][d] > 0.0f) { role = 1; break; }
+        }
+        Colours::opRole[(size_t) i] = role;
     }
 }
 
@@ -200,6 +351,13 @@ void MistEditor::showPage (int pg)
     tabs.setSelectedValue (pg);
     for (size_t i = 0; i < pages.size(); ++i) pages[i]->setVisible ((int) i == pg);
     updatePageTitle();
+}
+
+void MistEditor::showAbout (bool show)
+{
+    if (! show) about.showGame (false);
+    about.setVisible (show);
+    if (show) about.toFront (true);
 }
 
 void MistEditor::updatePageTitle()
@@ -227,32 +385,6 @@ void MistEditor::updatePageTitle()
 }
 
 // ---------------------------------------------------------------------------
-// Тема — глобальная настройка пользователя (~/Library/Application Support/Mist/Mist.settings)
-static std::unique_ptr<juce::PropertiesFile> openPrefs()
-{
-    juce::PropertiesFile::Options o;
-    o.applicationName = "Mist";
-    o.filenameSuffix = "settings";
-    o.folderName = "Mist";
-    o.osxLibrarySubFolder = "Application Support";
-    return std::make_unique<juce::PropertiesFile> (o);
-}
-
-ThemeId MistEditor::loadSavedTheme()
-{
-    return openPrefs()->getIntValue ("theme", 0) == 1 ? ThemeId::Dark : ThemeId::Light;
-}
-
-void MistEditor::setTheme (ThemeId id)
-{
-    applyTheme (id);
-    lnf.refreshColours();
-    if (auto p = openPrefs()) { p->setValue ("theme", (int) id); p->saveIfNeeded(); }
-    restyleTree (*this);
-    sendLookAndFeelChange();
-    repaint();
-}
-
 void MistEditor::showPresetMenu()
 {
     proc.presets.refresh();
@@ -281,22 +413,28 @@ void MistEditor::showSettingsMenu()
     const int cur = proc.presets.getCurrentIndex();
     m.addItem (4, "Delete current preset", cur >= 0 && proc.presets.getEntries()[cur].factoryIndex < 0);
     m.addSeparator();
+    juce::PopupMenu appearance;
+    appearance.addItem (201, "Match system", true, themeMode == ThemeMode::System);
+    appearance.addSeparator();
+    appearance.addItem (202, "Oxygen (light)", true, themeMode == ThemeMode::Oxygen);
+    appearance.addItem (203, "Rubber (dark)", true, themeMode == ThemeMode::Rubber);
+    m.addSubMenu ("Appearance", appearance);
     juce::PopupMenu size;
     for (int pct : { 75, 100, 125, 150 })
         size.addItem (100 + pct, juce::String (pct) + "%", true, std::abs (getWidth() - kBaseW * pct / 100) < 4);
     m.addSubMenu ("Window size", size);
-    juce::PopupMenu theme;
-    theme.addItem (201, "Light", true, currentTheme() == ThemeId::Light);
-    theme.addItem (202, "Dark", true, currentTheme() == ThemeId::Dark);
-    m.addSubMenu ("Theme", theme);
+    m.addSeparator();
+    m.addItem (5, "About Mist");
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton), [this] (int r)
     {
         if (r == 1) savePreset();
         else if (r == 2) proc.presets.initPatch();
         else if (r == 3) { auto f = PresetManager::getPresetFolder(); f.createDirectory(); f.startAsProcess(); }
         else if (r == 4) proc.presets.deleteUserPreset (proc.presets.getCurrentIndex());
-        else if (r == 201) setTheme (ThemeId::Light);
-        else if (r == 202) setTheme (ThemeId::Dark);
+        else if (r == 5) showAbout (true);
+        else if (r == 201) setThemeMode (ThemeMode::System);
+        else if (r == 202) setThemeMode (ThemeMode::Oxygen);
+        else if (r == 203) setThemeMode (ThemeMode::Rubber);
         else if (r > 100 && r < 200) setSize (kBaseW * (r - 100) / 100, kBaseH * (r - 100) / 100);
     });
 }
@@ -321,96 +459,90 @@ void MistEditor::savePreset()
 // ---------------------------------------------------------------------------
 void MistEditor::paint (juce::Graphics& g)
 {
-    g.fillAll (Colours::bg);
-    const float s = (float) getWidth() / (float) kBaseW;
-    g.addTransform (juce::AffineTransform::scale (s));
+    g.fillAll (Colours::window);
+    g.addTransform (juce::AffineTransform::scale ((float) getWidth() / (float) kBaseW));
 
-    // шапка
-    drawCard (g, headerArea.toFloat(), 12.0f, true);
-    g.setColour (Colours::text);
-    g.setFont (MistLookAndFeel::pixel (26.0f));
-    g.drawText ("Mist", headerArea.withTrimmedLeft (18).withWidth (60), juce::Justification::centredLeft);
+    // тулбар — стекло
+    LnF::drawGlass (g, toolbarArea.toFloat(), 18.0f);
     g.setColour (Colours::outline);
-    g.drawVerticalLine (headerArea.getX() + 74, (float) headerArea.getY() + 14, (float) headerArea.getBottom() - 14);
+    g.drawVerticalLine (logo.getRight() + 8, (float) toolbarArea.getY() + 15, (float) toolbarArea.getBottom() - 15);
 
-    // карточка настроек
-    drawCard (g, settingsArea.toFloat(), 14.0f, true);
-    g.setColour (Colours::text);
-    g.setFont (MistLookAndFeel::font (15.0f, true));
+    // панель оператора — плотная поверхность
+    const float radius = 14.0f;
+    g.setColour (Colours::surface);
+    g.fillRoundedRectangle (settingsArea.toFloat(), radius);
+    g.setColour (Colours::outline);
+    g.drawRoundedRectangle (settingsArea.toFloat().reduced (0.5f), radius, 1.0f);
+
+    g.setColour (Colours::ink);
+    g.setFont (LnF::font (LnF::Type::title3, true));
     auto ta = titleArea;
     g.drawText (pageTitle, ta.removeFromTop (20), juce::Justification::centredLeft);
-    g.setColour (Colours::textDim);
-    g.setFont (MistLookAndFeel::font (11.5f));
-    g.drawText (pageDescription, titleArea.withHeight (18).translated (0, 22), juce::Justification::centredLeft);
+    g.setColour (Colours::ink2);
+    g.setFont (LnF::font (LnF::Type::callout));
+    g.drawText (pageDescription, ta.removeFromTop (18), juce::Justification::centredLeft);
 
-    // нижняя панель
     g.setColour (Colours::outline);
-    g.drawHorizontalLine (bottomArea.getY(), (float) bottomArea.getX() + 4, (float) bottomArea.getRight() - 4);
+    g.drawHorizontalLine (bottomArea.getY(), (float) bottomArea.getX(), (float) bottomArea.getRight());
 }
 
-void MistEditor::paintOverChildren (juce::Graphics& g)
+void MistEditor::layoutSlots()
 {
-    // иконка настроек (два «фейдера»), как в макете
-    g.addTransform (juce::AffineTransform::scale ((float) getWidth() / (float) kBaseW));
-    auto r = settingsButton.getBounds().toFloat().withSizeKeepingCentre (14.0f, 10.0f);
-    g.setColour (Colours::text);
-    for (int i = 0; i < 2; ++i)
+    // заполненные карточки выше пустых
+    int mask = 0;
+    for (int i = 0; i < kNumOps; ++i) if (slots[(size_t) i]->hasSample()) mask |= 1 << i;
+    filledMask = mask;
+    const int gap = 8;
+    float units = 0;
+    for (int i = 0; i < kNumOps; ++i) units += (mask >> i & 1) ? 2.6f : 1.0f;
+    const float unitH = (float) (slotsArea.getHeight() - gap * (kNumOps - 1)) / units;
+    float y = (float) slotsArea.getY();
+    for (int i = 0; i < kNumOps; ++i)
     {
-        const float y = r.getY() + (float) i * r.getHeight();
-        g.drawLine (r.getX(), y, r.getRight(), y, 1.3f);
-        const float kx = i == 0 ? r.getX() + 4.0f : r.getRight() - 4.0f;
-        g.setColour (Colours::panelHi);
-        g.fillEllipse (kx - 2.5f, y - 2.5f, 5.0f, 5.0f);
-        g.setColour (Colours::text);
-        g.drawEllipse (kx - 2.5f, y - 2.5f, 5.0f, 5.0f, 1.2f);
+        const float h = unitH * ((mask >> i & 1) ? 2.6f : 1.0f);
+        slots[(size_t) i]->setBounds (slotsArea.getX(), juce::roundToInt (y), slotsArea.getWidth(), juce::roundToInt (h));
+        y += h + (float) gap;
     }
 }
 
 void MistEditor::resized()
 {
-    const float scale = (float) getWidth() / (float) kBaseW;
     content.setBounds (0, 0, kBaseW, kBaseH);
-    content.setTransform (juce::AffineTransform::scale (scale));
+    content.setTransform (juce::AffineTransform::scale ((float) getWidth() / (float) kBaseW));
+    about.setBounds (0, 0, kBaseW, kBaseH);
 
     auto r = juce::Rectangle<int> (0, 0, kBaseW, kBaseH).reduced (14);
 
-    // шапка
-    headerArea = r.removeFromTop (48);
+    // тулбар 52 px; элементы — 32 px (цель нажатия ≥ 28)
+    toolbarArea = r.removeFromTop (52);
     {
-        auto h = headerArea.reduced (10, 9);
-        h.removeFromLeft (72);
-        prevPreset.setBounds (h.removeFromLeft (28));
-        presetName.setBounds (h.removeFromLeft (190));
-        nextPreset.setBounds (h.removeFromLeft (28));
-        settingsButton.setBounds (h.removeFromRight (34));
+        auto h = toolbarArea.reduced (10, 10);
+        logo.setBounds (h.removeFromLeft (64));
+        h.removeFromLeft (18);
+        prevPreset.setBounds (h.removeFromLeft (32));
+        presetName.setBounds (h.removeFromLeft (170));
+        nextPreset.setBounds (h.removeFromLeft (32));
+        settingsButton.setBounds (h.removeFromRight (32));
         h.removeFromRight (10);
-        outMeter.setBounds (h.removeFromRight (150));
-        modeSwitch.setBounds (headerArea.withSizeKeepingCentre (250, 30));
+        outMeter.setBounds (h.removeFromRight (160));
+        modeSwitch.setBounds (toolbarArea.withSizeKeepingCentre (270, 32));
     }
     r.removeFromTop (10);
 
     viz.setBounds (r.removeFromTop (262));
     r.removeFromTop (10);
 
-    // левая колонка — слоты семплов
-    auto left = r.removeFromLeft (318);
-    const int gap = 8;
-    const int slotH = (left.getHeight() - gap * (kNumOps - 1)) / kNumOps;
-    for (auto& s : slots)
-    {
-        s->setBounds (left.removeFromTop (slotH));
-        left.removeFromTop (gap);
-    }
+    slotsArea = r.removeFromLeft (300);
+    layoutSlots();
     r.removeFromLeft (10);
 
-    // карточка настроек
     settingsArea = r;
     auto inner = r.reduced (18, 14);
-    bottomArea = inner.removeFromBottom (40);
-    tabs.setBounds (inner.removeFromTop (30).withWidth (juce::jmin (inner.getWidth(), 620)));
+    bottomArea = inner.removeFromBottom (44);
+    tabs.setBounds (inner.removeFromTop (30).withWidth (juce::jmin (inner.getWidth(), 600)));
     inner.removeFromTop (12);
-    titleArea = inner.removeFromTop (42);
-    inner.removeFromTop (10);
+    titleArea = inner.removeFromTop (40);
+    inner.removeFromTop (8);
     for (auto* pg : pages) pg->setBounds (inner);
     {
         auto l = lfoPage.getLocalBounds();
@@ -419,41 +551,48 @@ void MistEditor::resized()
         lfo2.setBounds (l);
     }
 
-    auto b = bottomArea.withTrimmedTop (8);
-    drone.setBounds (b.removeFromLeft (84).withSizeKeepingCentre (84, 24));
+    auto b = bottomArea.withTrimmedTop (10);
+    drone.setBounds (b.removeFromLeft (92).withSizeKeepingCentre (92, 28));
     b.removeFromLeft (8);
-    interp.setBounds (b.removeFromLeft (170).withSizeKeepingCentre (170, 26));
+    interp.setBounds (b.removeFromLeft (172).withSizeKeepingCentre (172, 28));
     b.removeFromLeft (8);
-    oversampling.setBounds (b.removeFromLeft (150).withSizeKeepingCentre (150, 26));
-    cpuLabel.setBounds (b);
+    oversampling.setBounds (b.removeFromLeft (156).withSizeKeepingCentre (156, 28));
+    statusLabel.setBounds (b);
 }
 
 void MistEditor::timerCallback()
 {
-    // аудио → визуализация
     const int ready = proc.scopeFifo.getNumReady();
     if (ready > 0)
     {
         const auto rd = proc.scopeFifo.read (ready);
-        if (rd.blockSize1 > 0) viz.push (proc.scopeL.data() + rd.startIndex1, proc.scopeR.data() + rd.startIndex1, rd.blockSize1);
-        if (rd.blockSize2 > 0) viz.push (proc.scopeL.data() + rd.startIndex2, proc.scopeR.data() + rd.startIndex2, rd.blockSize2);
+        if (! about.isVisible())
+        {
+            if (rd.blockSize1 > 0) viz.push (proc.scopeL.data() + rd.startIndex1, proc.scopeR.data() + rd.startIndex1, rd.blockSize1);
+            if (rd.blockSize2 > 0) viz.push (proc.scopeL.data() + rd.startIndex2, proc.scopeR.data() + rd.startIndex2, rd.blockSize2);
+        }
     }
+    if (about.isVisible()) return;
+
     viz.setSampleRate (proc.getSampleRate());
-    auto* d = proc.apvts.getParameter ("drone");
-    viz.setDroneState (d->getValue() > 0.5f, proc.lowestNote.load());
     viz.tick();
 
-    // шапка
     presetName.setButtonText (proc.presets.getCurrentName());
+    presetName.setDescription ("Preset " + proc.presets.getCurrentName());
     outMeter.setLevel (proc.outPeak.load());
     auto* m = proc.apvts.getParameter (opId (selectedOp, "mode"));
     modeSwitch.setSelectedValue ((int) m->convertFrom0to1 (m->getValue()));
 
-    cpuLabel.setText ("Voices " + juce::String (proc.activeVoices.load()) + "/" + juce::String (kNumVoices)
-                      + "      CPU " + juce::String (juce::roundToInt (proc.cpuLoad.load() * 100.0f)) + "%",
-                      juce::dontSendNotification);
+    statusLabel.setText ("Voices " + juce::String (proc.activeVoices.load()) + "/" + juce::String (kNumVoices)
+                         + "   CPU " + juce::String (juce::roundToInt (proc.cpuLoad.load() * 100.0f)) + "%",
+                         juce::dontSendNotification);
 
+    updateRoles();
     for (auto& s : slots) s->refresh();
+    int mask = 0;
+    for (int i = 0; i < kNumOps; ++i) if (slots[(size_t) i]->hasSample()) mask |= 1 << i;
+    if (mask != filledMask) layoutSlots();
+
     updatePageTitle();
     switch (page)
     {

@@ -226,53 +226,56 @@ int main (int argc, char** argv)
     if (juce::Desktop::getInstance().getDisplays().getPrimaryDisplay() != nullptr)
     {
         std::cout << "== Editor snapshot\n";
-        p.presets.load (2);
-        if (asset) p.loadSampleAsync (2, sampleFile);
+        p.presets.load (4);   // Breathing Swarm: Op1 — несущая, Op2 — модулятор
+        if (asset)
+        {
+            p.loadSampleAsync (0, sampleFile);
+            juce::MessageManager::getInstance()->runDispatchLoopUntil (300);
+            p.loadSampleAsync (1, sampleFile);
+        }
         juce::MessageManager::getInstance()->runDispatchLoopUntil (500);
         setParam (p, "drone", 1.0f);
-        setParam (p, opId (2, "mode"), (float) OpModeSample);
+        setParam (p, opId (0, "mode"), (float) OpModeWave);
         std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
         auto* le = dynamic_cast<MistEditor*> (ed.get());
         ed->setSize (MistEditor::kBaseW, MistEditor::kBaseH);
         p.prepareToPlay (48000.0, 512);
 
-        struct Shot { const char* name; int page, viz, op; };
-        const Shot shots[] = { { "ui_waves", 0, 0, 2 }, { "ui_spectrum", 2, 1, 0 }, { "ui_scope", 6, 2, 1 }, { "ui_envelope", 1, 0, 3 } };
-        bool first = true;
-        for (auto& sh : shots)
+        auto pump = [&] (int blocks, bool notes)
         {
-            le->setView (sh.page, sh.viz, sh.op);
-            // гоним звук, чтобы визуализация ожила
             juce::AudioBuffer<float> buf (2, 512);
-            for (int blk = 0; blk < 90; ++blk)
+            for (int blk = 0; blk < blocks; ++blk)
             {
                 juce::MidiBuffer midi;
-                if (first && blk == 0) for (int nn : { 45, 52, 57, 64 }) midi.addEvent (juce::MidiMessage::noteOn (1, nn, (juce::uint8) 100), 0);
-                if (first && blk == 1) for (int nn : { 45, 52, 57, 64 }) midi.addEvent (juce::MidiMessage::noteOff (1, nn), 0);   // Drone держит
+                if (notes && blk == 0) for (int nn : { 45, 52, 57, 64 }) midi.addEvent (juce::MidiMessage::noteOn (1, nn, (juce::uint8) 100), 0);
+                if (notes && blk == 1) for (int nn : { 45, 52, 57, 64 }) midi.addEvent (juce::MidiMessage::noteOff (1, nn), 0);   // Drone держит
                 p.processBlock (buf, midi);
                 juce::MessageManager::getInstance()->runDispatchLoopUntil (11);
             }
-            first = false;
+        };
+        auto shoot = [&] (const juce::String& name)
+        {
             auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
-            auto pngFile = outDir.getChildFile (juce::String (sh.name) + ".png");
+            auto pngFile = outDir.getChildFile (name + ".png");
             pngFile.deleteFile();
             juce::FileOutputStream fos (pngFile);
             juce::PNGImageFormat().writeImageToStream (img, fos);
             std::cout << "  wrote " << pngFile.getFullPathName() << "\n";
-        }
-        // тёмная тема
-        le->setThemeForTest (ThemeId::Dark);
-        le->setView (0, 0, 2);
+        };
+
+        bool first = true;
+        for (auto theme : { ThemeId::Oxygen, ThemeId::Rubber })
         {
-            juce::AudioBuffer<float> buf (2, 512);
-            for (int blk = 0; blk < 60; ++blk) { juce::MidiBuffer midi; p.processBlock (buf, midi); juce::MessageManager::getInstance()->runDispatchLoopUntil (11); }
-            auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
-            auto pngFile = outDir.getChildFile ("ui_dark.png");
-            pngFile.deleteFile();
-            juce::FileOutputStream fos (pngFile);
-            juce::PNGImageFormat().writeImageToStream (img, fos);
+            const juce::String tn = theme == ThemeId::Oxygen ? "oxygen" : "rubber";
+            le->setThemeForTest (theme);
+            le->setView (0, 2, 0);  pump (90, first); first = false; shoot ("ui_" + tn + "_scope");
+            le->setView (2, 0, 1);  pump (60, false); shoot ("ui_" + tn + "_waves");
+            le->setView (6, 1, 0);  pump (60, false); shoot ("ui_" + tn + "_spectrum");
+            le->showAboutForTest (true, false); pump (5, false); shoot ("about_" + tn);
+            le->showAboutForTest (true, true);  pump (40, false); shoot ("game_" + tn);
+            le->showAboutForTest (false, false);
         }
-        le->setThemeForTest (ThemeId::Light);
+        le->setThemeForTest (ThemeId::Oxygen);
         CHECK (p.activeVoices.load() > 0, "drone did not hold notes");
         setParam (p, "drone", 0.0f);
         ed.reset();
