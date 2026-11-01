@@ -231,8 +231,6 @@ void GameView::paint (juce::Graphics& g)
         g.setFont (LnF::font (LnF::Type::headline, true));
         g.drawText ("Try again", getLocalBounds().withTrimmedBottom (40), juce::Justification::centred);
     }
-    if (hasKeyboardFocus (false))
-        LnF::drawFocusRing (g, r, 12.0f);
 }
 
 // ===========================================================================
@@ -240,8 +238,8 @@ void AboutPage::BackLogo::paintButton (juce::Graphics& g, bool over, bool)
 {
     // маленький логотип — клик возвращает в плагин
     g.setColour (over ? Colours::ink.withAlpha (0.7f) : Colours::ink);
-    g.setFont (LnF::pixel (26.0f));
-    g.drawText ("Mist", getLocalBounds(), juce::Justification::centredLeft);
+    g.setFont (LnF::pixel (24.0f));
+    g.drawText ("Mist", getLocalBounds(), juce::Justification::centred);
     if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, getLocalBounds().toFloat(), 8.0f);
 }
 
@@ -349,7 +347,7 @@ void AboutPage::paint (juce::Graphics& g)
 void AboutPage::resized()
 {
     const float W = (float) getWidth(), H = (float) getHeight();
-    back.setBounds (24, 16, 84, 40);
+    back.setBounds (24, 24, 64, 32);   // ровно там же, где логотип в тулбаре
 
     if (! gameMode)
     {

@@ -118,6 +118,12 @@ void styleLabel (juce::Label& l, bool dim)
     l.setColour (juce::Label::textColourId, dim ? Colours::textDim : Colours::text);
 }
 
+void disableClickFocus (juce::Component& root)
+{
+    root.setMouseClickGrabsKeyboardFocus (false);
+    for (auto* c : root.getChildren()) disableClickFocus (*c);
+}
+
 void restyleTree (juce::Component& root)
 {
     if (auto* l = dynamic_cast<juce::Label*> (&root))

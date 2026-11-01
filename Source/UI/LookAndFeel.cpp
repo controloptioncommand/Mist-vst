@@ -199,7 +199,7 @@ static juce::Colour accentOf (juce::Component& c)
 void MistLookAndFeel::drawFocusRing (juce::Graphics& g, juce::Rectangle<float> r, float radius)
 {
     g.setColour (Colours::signal);
-    g.drawRoundedRectangle (r.reduced (1.5f), juce::jmax (0.0f, radius - 1.5f), 3.0f);
+    g.drawRoundedRectangle (r.reduced (1.0f), juce::jmax (0.0f, radius - 1.0f), 2.0f);
 }
 
 void MistLookAndFeel::drawGlass (juce::Graphics& g, juce::Rectangle<float> r, float radius)

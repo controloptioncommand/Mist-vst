@@ -276,6 +276,7 @@ MistEditor::MistEditor (MistProcessor& p)
     content.addChildComponent (about);
     about.onClose = [this] { showAbout (false); };
 
+    disableClickFocus (content);
     updateRoles();
     selectOperator (0);
     showPage (0);

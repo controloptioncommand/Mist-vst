@@ -74,7 +74,9 @@ private:
 
 // Цвет подписи задаётся ролью, чтобы перекрашиваться при смене темы
 void styleLabel (juce::Label& l, bool dim);
-void restyleTree (juce::Component& root);   // обновить цвета всех подписей после смены темы
+void restyleTree (juce::Component& root);
+// клик мышью не забирает фокус клавиатуры — кольцо фокуса видно только при навигации Tab
+void disableClickFocus (juce::Component& root);   // обновить цвета всех подписей после смены темы
 
 void layoutRow (juce::Rectangle<int> area, std::initializer_list<juce::Component*> items, int gap = 4);
 void layoutRow (juce::Rectangle<int> area, const std::vector<juce::Component*>& items, int gap = 4, int maxWidth = 10000);
