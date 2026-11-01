@@ -234,10 +234,10 @@ void GameView::paint (juce::Graphics& g)
 }
 
 // ===========================================================================
-void AboutPage::BackLogo::paintButton (juce::Graphics& g, bool over, bool down)
+void AboutPage::BackLogo::paintButton (juce::Graphics& g, bool, bool)
 {
-    // маленький логотип — клик возвращает в плагин; без рамки, выделение — сигнальным цветом текста
-    g.setColour ((over || down || hasKeyboardFocus (false)) ? Colours::signal : Colours::ink);
+    // маленький логотип — клик возвращает в плагин; на странице About он всегда сигнального цвета
+    g.setColour (Colours::signal);
     g.setFont (LnF::pixel (24.0f));
     g.drawText ("Mist", getLocalBounds(), juce::Justification::centred);
 }

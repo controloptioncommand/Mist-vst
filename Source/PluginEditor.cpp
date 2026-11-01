@@ -151,10 +151,10 @@ void OutMeter::paint (juce::Graphics& g)
 }
 
 // ===========================================================================
-void LogoButton::paintButton (juce::Graphics& g, bool over, bool down)
+void LogoButton::paintButton (juce::Graphics& g, bool, bool)
 {
-    // без рамки: наведение, нажатие и фокус клавиатурой — сигнальным цветом текста
-    g.setColour ((over || down || hasKeyboardFocus (false)) ? Colours::signal : Colours::ink);
+    // в главном окне логотип не подсвечивается от мыши; сигнальным — только фокус клавиатурой (Tab)
+    g.setColour (hasKeyboardFocus (false) ? Colours::signal : Colours::ink);
     g.setFont (LnF::pixel (24.0f));
     g.drawText ("Mist", getLocalBounds(), juce::Justification::centred);
 }
