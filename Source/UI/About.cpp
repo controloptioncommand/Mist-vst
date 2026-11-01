@@ -278,6 +278,8 @@ AboutPage::AboutPage()
     setDescription (juce::String ("Mist ") + AboutInfo::version + ", " + AboutInfo::date + ", " + AboutInfo::author);
     addAndMakeVisible (back);
     addAndMakeVisible (logoHit);
+    addAndMakeVisible (versionLink);
+    addAndMakeVisible (authorLink);
     logoHit.setTitle ("Mist logo");
     logoHit.onSecretClicks = [this] { showGame (true); };
     addChildComponent (closeGame);
@@ -347,6 +349,13 @@ void AboutPage::paint (juce::Graphics& g)
 void AboutPage::resized()
 {
     const float W = (float) getWidth(), H = (float) getHeight();
+    // версия и дата в левом нижнем углу (ширина — по тексту)
+    {
+        const auto bold = LnF::font (LnF::Type::callout, true), regular = LnF::font (LnF::Type::callout);
+        const float w = (float) juce::GlyphArrangement::getStringWidth (bold, AboutInfo::version)
+                      + (float) juce::GlyphArrangement::getStringWidth (regular, midDot() + AboutInfo::date);
+        versionLink.setBounds (juce::Rectangle<float> (24.0f, H - 46.0f, w + 10.0f, 26.0f).toNearestInt());
+    }
     back.setBounds (24, 24, 64, 32);   // ровно там же, где логотип в тулбаре
 
     if (! gameMode)
@@ -354,11 +363,13 @@ void AboutPage::resized()
         bigLogo = { 0.0f, H * 0.33f, W, 140.0f };
         versionLine = { 0.0f, bigLogo.getBottom() + 4.0f, W, 18.0f };
         logoHit.setBounds (bigLogo.withSizeKeepingCentre (360.0f, bigLogo.getHeight()).toNearestInt());
+        authorLink.setBounds (versionLine.withSizeKeepingCentre (110.0f, 22.0f).toNearestInt());
     }
     else
     {
         bigLogo = { 0.0f, H * 0.12f, W, 80.0f };
         versionLine = { 0.0f, bigLogo.getBottom() + 2.0f, W, 18.0f };
+        authorLink.setBounds (versionLine.withSizeKeepingCentre (110.0f, 22.0f).toNearestInt());
         game.setBounds ((int) (W - 680.0f) / 2, (int) versionLine.getBottom() + 34, 680, 220);
         hintLine = { 0.0f, (float) game.getBottom() + 14.0f, W, 16.0f };
         closeGame.setBounds ((int) (W * 0.5f) - 65, (int) hintLine.getBottom() + 16, 130, 40);

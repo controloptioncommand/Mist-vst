@@ -67,13 +67,44 @@ jobs:
 
       # Публикация: постоянная ссылка
       # https://github.com/controloptioncommand/mist/releases/latest/download/Mist-macOS.zip
+      - name: Rename legacy releases (build-N -> v1, v1.01, ...)
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # одноразово и идемпотентно: тег ставится на тот же коммит, что был у старого релиза
+          while read -r OLD NEW; do
+            gh release view "$OLD" -R "$REPO" >/dev/null 2>&1 || continue
+            SHA=$(gh api "repos/$REPO/git/ref/tags/$OLD" --jq '.object.sha')
+            if [ "$(gh api "repos/$REPO/git/ref/tags/$OLD" --jq '.object.type')" = "tag" ]; then
+              SHA=$(gh api "repos/$REPO/git/tags/$SHA" --jq '.object.sha')
+            fi
+            gh api -X POST "repos/$REPO/git/refs" -f ref="refs/tags/$NEW" -f sha="$SHA" >/dev/null 2>&1 || true
+            gh release edit "$OLD" -R "$REPO" --tag "$NEW" --title "$NEW" --latest=false
+            gh api -X DELETE "repos/$REPO/git/refs/tags/$OLD" || true
+            echo "$OLD -> $NEW ($SHA)"
+          done <<'MAP'
+          build-4 v1
+          build-5 v1.01
+          build-6 v1.02
+          build-8 v1.03
+          build-9 v1.04
+          build-10 v1.05
+          build-11 v1.06
+          build-12 v1.07
+          MAP
+
       - name: Publish release
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="build-${{ github.run_number }}"
+          # имя релиза берётся из файла VERSION (v1, v1.01, …, v2); повторная сборка той же версии обновляет релиз
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          gh release delete "$VERSION" --cleanup-tag -y || true
           gh release create "$VERSION" Mist-macOS.zip \
-            --title "Mist ($VERSION)" \
+            --target "${{ github.sha }}" \
+            --title "$VERSION" \
             --notes "Скачайте Mist-macOS.zip, распакуйте и выполните в Терминале: bash ~/Downloads/Mist-macOS/install-mac.sh" \
             --latest

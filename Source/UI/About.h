@@ -6,7 +6,9 @@ namespace mist
 // Версия и дата — показываются на странице About
 namespace AboutInfo
 {
-    inline const char* version = "v1.01";
+    inline const char* version = "v2";
+    inline const char* repoUrl = "https://github.com/controloptioncommand/Mist";
+    inline const char* authorUrl = "https://t.me/nothiingnothingnothing";
     inline const char* date = "1st November 2026";
     inline const char* author = "made by nnn";
 }
@@ -67,6 +69,31 @@ private:
         juce::uint32 lastClick = 0;
         int clicks = 0;
     };
+    // Невидимая кликабельная область поверх текста: внешне ничем не выделена
+    struct HiddenLink : juce::Component
+    {
+        HiddenLink (const juce::String& title, const juce::String& u) : url (u)
+        {
+            setTitle (title);
+            setDescription (u);
+            setWantsKeyboardFocus (true);
+            setMouseClickGrabsKeyboardFocus (false);
+        }
+        void mouseUp (const juce::MouseEvent& e) override { if (e.mouseWasClicked()) open(); }
+        bool keyPressed (const juce::KeyPress& k) override
+        {
+            if (k == juce::KeyPress::returnKey || k == juce::KeyPress::spaceKey) { open(); return true; }
+            return false;
+        }
+        void paint (juce::Graphics& g) override
+        {
+            if (hasKeyboardFocus (false)) MistLookAndFeel::drawFocusRing (g, getLocalBounds().toFloat(), 6.0f);
+        }
+        void focusGained (FocusChangeType) override { repaint(); }
+        void focusLost (FocusChangeType) override { repaint(); }
+        void open() { juce::URL (url).launchInDefaultBrowser(); }
+        juce::String url;
+    };
     struct CapsuleButton : juce::Button
     {
         explicit CapsuleButton (const juce::String& t) : juce::Button (t) { setTitle (t); }
@@ -77,6 +104,8 @@ private:
 
     BackLogo back;
     SecretLogo logoHit;
+    HiddenLink versionLink { "Mist on GitHub", AboutInfo::repoUrl };
+    HiddenLink authorLink { "Author on Telegram", AboutInfo::authorUrl };
     CapsuleButton closeGame { "Close game" };
     GameView game;
     bool gameMode = false;

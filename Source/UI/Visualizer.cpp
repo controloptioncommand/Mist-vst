@@ -199,10 +199,78 @@ void Visualizer::paintWaves (juce::Graphics& g, juce::Rectangle<float> area)
 
 // ===========================================================================
 // Spectrum
+// Оптимизация: спектрограмма — это картинка, которая сдвигается влево; на каждом тике дорисовываются
+// только новые столбцы (через BitmapData), цвета — из таблицы на 256 значений.
+void Visualizer::prepareSpectrum()
+{
+    const int rows = juce::jmax (8, getHeight() - 18);
+    const int width = juce::jmax (8, getWidth() - 2);
+    if (rows != specRows || sampleRate != specRate)
+    {
+        specRows = rows;
+        specRate = sampleRate;
+        binRange.resize ((size_t) rows);
+        tiltDb.resize ((size_t) rows);
+        const float nyq = (float) sampleRate * 0.5f;
+        for (int y = 0; y < rows; ++y)
+        {
+            const float t0 = 1.0f - (float) (y + 1) / (float) rows, t1 = 1.0f - (float) y / (float) rows;
+            const float f0 = 20.0f * std::pow (1000.0f, t0), f1 = 20.0f * std::pow (1000.0f, t1);
+            const int b0 = juce::jlimit (1, kFftSize / 2 - 1, (int) (f0 / nyq * (kFftSize / 2)));
+            const int b1 = juce::jlimit (b0, kFftSize / 2 - 1, (int) (f1 / nyq * (kFftSize / 2)));
+            binRange[(size_t) y] = { b0, b1 };
+            tiltDb[(size_t) y] = 3.0f * std::log2 (juce::jmax (20.0f, (f0 + f1) * 0.5f) / 1000.0f);
+        }
+        spectroCols.clear();
+        specImage = {};
+    }
+    if (! specImage.isValid() || specImage.getWidth() != width || specImage.getHeight() != rows)
+    {
+        specImage = juce::Image (juce::Image::ARGB, width, rows, true);
+        lutKey = {};   // перерисовать из истории
+    }
+}
+
+void Visualizer::updateLut()
+{
+    const auto bg = background();
+    const auto key = bg.toString() + Colours::carrierRamp[0].toString() + Colours::carrierRamp[1].toString() + Colours::carrierRamp[2].toString();
+    if (key == lutKey) return;
+    lutKey = key;
+    for (int i = 0; i < 256; ++i)
+    {
+        const float v = (float) i / 255.0f;
+        const auto c = v < 0.05f ? juce::Colours::transparentBlack
+                                 : bg.interpolatedWith (rampColour (Colours::carrierRamp, v), juce::jmin (1.0f, v * 1.8f));
+        lut[(size_t) i] = c.getPixelARGB();
+    }
+    // тема сменилась — перерисовать картинку из сохранённых значений
+    specImage.clear (specImage.getBounds());
+    const int n = (int) spectroCols.size();
+    for (int k = 0; k < n; ++k)
+        drawSpectrumColumn (specImage.getWidth() - (n - k) * kSpecColW, spectroCols[(size_t) k]);
+}
+
+void Visualizer::drawSpectrumColumn (int x, const std::vector<juce::uint8>& col)
+{
+    if (x + kSpecColW <= 0 || x >= specImage.getWidth()) return;
+    juce::Image::BitmapData bd (specImage, juce::Image::BitmapData::writeOnly);
+    const int rows = juce::jmin ((int) col.size(), specImage.getHeight());
+    for (int y = 0; y < rows; ++y)
+    {
+        const auto px = lut[col[(size_t) y]];
+        for (int dx = 0; dx < kSpecColW; ++dx)
+            if (x + dx >= 0 && x + dx < specImage.getWidth())
+                bd.setPixelColour (x + dx, y, juce::Colour (px));
+    }
+}
+
 void Visualizer::computeSpectrumColumns()
 {
-    const int H = juce::jmax (1, getHeight() - 2);
+    prepareSpectrum();
+    updateLut();
     if (written - spectrumRead > kRing / 2) spectrumRead = written - kRing / 2;
+    const int rows = specRows;
     int columns = 0;
     while (spectrumRead + kHop <= written && columns < 16)
     {
@@ -218,45 +286,32 @@ void Visualizer::computeSpectrumColumns()
         window.multiplyWithWindowingTable (fftBuf.data(), (size_t) kFftSize);
         fft.performFrequencyOnlyForwardTransform (fftBuf.data(), true);
 
-        std::vector<float> col ((size_t) H);
-        const float nyq = (float) sampleRate * 0.5f;
-        for (int y = 0; y < H; ++y)
+        std::vector<juce::uint8> col ((size_t) rows);
+        const float norm = 1.0f / (float) (kFftSize / 4);
+        for (int y = 0; y < rows; ++y)
         {
-            const float t0 = 1.0f - (float) (y + 1) / (float) H, t1 = 1.0f - (float) y / (float) H;
-            const float f0 = 20.0f * std::pow (1000.0f, t0), f1 = 20.0f * std::pow (1000.0f, t1);
-            int b0 = juce::jlimit (1, kFftSize / 2 - 1, (int) (f0 / nyq * (kFftSize / 2)));
-            int b1 = juce::jlimit (b0, kFftSize / 2 - 1, (int) (f1 / nyq * (kFftSize / 2)));
+            const auto [b0, b1] = binRange[(size_t) y];
             float mag = 0.0f;
             for (int b = b0; b <= b1; ++b) mag = juce::jmax (mag, fftBuf[(size_t) b]);
-            const float db = juce::Decibels::gainToDecibels (mag / (float) (kFftSize / 4), -120.0f);
-            const float tilt = 3.0f * std::log2 (juce::jmax (20.0f, (f0 + f1) * 0.5f) / 1000.0f);
-            col[(size_t) y] = juce::jlimit (0.0f, 1.0f, (db + tilt + 90.0f) / 84.0f);
+            const float db = juce::Decibels::gainToDecibels (mag * norm, -120.0f);
+            col[(size_t) y] = (juce::uint8) juce::roundToInt (juce::jlimit (0.0f, 1.0f, (db + tiltDb[(size_t) y] + 90.0f) / 84.0f) * 255.0f);
         }
-        columnValues = col;
+
+        // сдвигаем картинку влево и рисуем только новый столбец
+        const int w = specImage.getWidth();
+        specImage.moveImageSection (0, 0, kSpecColW, 0, w - kSpecColW, specImage.getHeight());
+        drawSpectrumColumn (w - kSpecColW, col);
         spectroCols.push_back (std::move (col));
         ++columns;
     }
-    while ((int) spectroCols.size() > juce::jmax (1, getWidth() / 2)) spectroCols.pop_front();
+    while ((int) spectroCols.size() > specImage.getWidth() / kSpecColW + 1) spectroCols.pop_front();
 }
 
 void Visualizer::paintSpectrum (juce::Graphics& g, juce::Rectangle<float> area)
 {
-    const auto bg = background();
-    const float colW = 2.0f;
-    float x = area.getRight() - colW * (float) spectroCols.size();
-    for (auto& col : spectroCols)
-    {
-        const int H = (int) col.size();
-        const float ch = area.getHeight() / (float) juce::jmax (1, H);
-        for (int y = 0; y < H; ++y)
-        {
-            const float v = col[(size_t) y];
-            if (v < 0.05f) continue;
-            g.setColour (bg.interpolatedWith (rampColour (Colours::carrierRamp, v), juce::jmin (1.0f, v * 1.8f)));
-            g.fillRect (x, area.getY() + (float) y * ch, colW, ch + 0.5f);
-        }
-        x += colW;
-    }
+    prepareSpectrum();
+    updateLut();
+    g.drawImage (specImage, area, juce::RectanglePlacement::stretchToFit);
     g.setFont (LnF::mono (LnF::Type::footnote));
     for (float f : { 100.0f, 1000.0f, 10000.0f })
     {

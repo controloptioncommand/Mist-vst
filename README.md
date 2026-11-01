@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.01-FF6B2C?style=flat-square&labelColor=18191C" alt="version 1.01">
+  <img src="https://img.shields.io/badge/version-2-FF6B2C?style=flat-square&labelColor=18191C" alt="version 2">
   <img src="https://img.shields.io/badge/macOS-Apple%20Silicon-EDEDE9?style=flat-square&labelColor=18191C" alt="macOS, Apple Silicon">
   <img src="https://img.shields.io/badge/formats-VST3%20%C2%B7%20AU-8EA0FF?style=flat-square&labelColor=18191C" alt="VST3 and AU">
   <img src="https://img.shields.io/badge/vibe-coded-FF7AA2?style=flat-square&labelColor=18191C" alt="vibe-coded">
@@ -83,7 +83,7 @@
 Да, внутри есть игра. Клик по пиксельному логотипу **Mist** в тулбаре открывает страницу About. А если **пять раз быстро кликнуть по большому логотипу**, запустится бегалка: пиксельная сова-сипуха 12×13 прыгает через пни и стог сена под луной. Пробел, ↑ или клик — прыжок. Рекорд хранится до закрытия плагина. Проигрыш дружелюбный: сова просто садится, и можно нажать «Try again».
 
 <p align="center">
-  <img src="docs/assets/about_rubber.png" alt="Страница About: большой пиксельный логотип Mist, под ним made by nnn, в левом нижнем углу версия v1.01 и дата." width="49%">
+  <img src="docs/assets/about_rubber.png" alt="Страница About: большой пиксельный логотип Mist, под ним made by nnn, в левом нижнем углу версия v2 и дата." width="49%">
   <img src="docs/assets/game_rubber.png" alt="Игра: пиксельная оранжевая сова стоит на линии земли, вверху луна, звёзды и счёт HI 00000 / 00000." width="49%">
 </p>
 

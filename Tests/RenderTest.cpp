@@ -292,6 +292,20 @@ int main (int argc, char** argv)
             le->setView (0, 2, 0);  pump (90, first); first = false; shoot ("ui_" + tn + "_scope");
             le->setView (2, 0, 1);  pump (60, false); shoot ("ui_" + tn + "_waves");
             le->setView (6, 1, 0);  pump (60, false); shoot ("ui_" + tn + "_spectrum");
+            {
+                // скорость: 30 кадров отрисовки главного окна в виде Spectrum
+                const auto t0 = juce::Time::getMillisecondCounterHiRes();
+                double paintMs = 0;
+                for (int k = 0; k < 30; ++k)
+                {
+                    pump (1, false);
+                    const auto a = juce::Time::getMillisecondCounterHiRes();
+                    (void) ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+                    paintMs += juce::Time::getMillisecondCounterHiRes() - a;
+                }
+                juce::ignoreUnused (t0);
+                std::cout << "  spectrum view paint: " << juce::String (paintMs / 30.0, 2) << " ms/frame\n";
+            }
             le->showAboutForTest (true, false); pump (5, false); shoot ("about_" + tn);
             le->showAboutForTest (true, true);  pump (40, false); shoot ("game_" + tn);
             le->showAboutForTest (false, false);

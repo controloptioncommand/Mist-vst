@@ -64,8 +64,18 @@ private:
     juce::dsp::FFT fft { kFftOrder };
     juce::dsp::WindowingFunction<float> window { (size_t) kFftSize, juce::dsp::WindowingFunction<float>::hann };
     std::vector<float> fftBuf = std::vector<float> (kFftSize * 2, 0.0f);
-    std::vector<float> columnValues;              // последний столбец, 0..1 по высоте
-    std::deque<std::vector<float>> spectroCols;   // история столбцов (значения, не цвета — тема может смениться)
+    static constexpr int kSpecColW = 2;
+    std::deque<std::vector<juce::uint8>> spectroCols;   // история столбцов (значения 0..255 — тема может смениться)
+    juce::Image specImage;
+    int specRows = 0;
+    double specRate = 0.0;
+    std::vector<std::pair<int, int>> binRange;
+    std::vector<float> tiltDb;
+    std::array<juce::PixelARGB, 256> lut {};
+    juce::String lutKey;
+    void prepareSpectrum();
+    void updateLut();
+    void drawSpectrumColumn (int x, const std::vector<juce::uint8>& col);
 
     juce::Rectangle<float> tabsArea, legendArea, previewChip;
 };
