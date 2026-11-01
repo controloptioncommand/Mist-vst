@@ -153,8 +153,8 @@ void OutMeter::paint (juce::Graphics& g)
 // ===========================================================================
 void LogoButton::paintButton (juce::Graphics& g, bool, bool)
 {
-    // Oxygen — логотип сигнальным цветом, Rubber — цветом текста (фокус Tab — сигнальным); от мыши не меняется
-    g.setColour (currentTheme() == ThemeId::Oxygen || hasKeyboardFocus (false) ? Colours::signal : Colours::ink);
+    // Oxygen — логотип сигнальным цветом, Rubber — цветом текста; не меняется ни от мыши, ни от фокуса
+    g.setColour (currentTheme() == ThemeId::Oxygen ? Colours::signal : Colours::ink);
     g.setFont (LnF::pixel (24.0f));
     g.drawText ("Mist", getLocalBounds(), juce::Justification::centred);
 }
