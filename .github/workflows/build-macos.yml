@@ -77,33 +77,6 @@ jobs:
           name: Mist-macOS
           path: Mist-macOS.zip
 
-      # Прошлые версии (v1 … v1.07): релизы только с патчноутом, если для тега ещё нет релиза
-      - name: Publish notes for earlier versions
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          VERSION="$(tr -d '[:space:]' < VERSION)"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # недостающие теги прошлых версий — на их настоящие коммиты
-          grep -v '^#' docs/releases/tags.txt | while read -r TAG SHA; do
-            [ -z "$TAG" ] && continue
-            git rev-parse -q --verify "refs/tags/$TAG" >/dev/null && continue
-            git tag "$TAG" "$SHA" && git push origin "refs/tags/$TAG" && echo "tag: $TAG -> $SHA"
-          done
-          for f in $(ls docs/releases/v*.md | sort -V); do
-            TAG="$(basename "$f" .md)"
-            [ "$TAG" = "$VERSION" ] && continue
-            git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || continue
-            if gh release view "$TAG" >/dev/null 2>&1; then
-              gh release edit "$TAG" --title "$TAG" --notes-file "$f"
-            else
-              gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$f" --latest=false
-            fi
-            echo "notes: $TAG"
-          done
-
       # Текущая версия: архив + патчноут. Постоянная ссылка:
       # https://github.com/controloptioncommand/Mist-vst/releases/latest/download/Mist-macOS.zip
       - name: Publish release
@@ -119,3 +92,31 @@ jobs:
             --title "$VERSION" \
             --notes-file "docs/releases/$VERSION.md" \
             --latest
+
+      # Прошлые версии (v1 … v1.07): релизы только с патчноутом.
+      # Тег ставится через API на настоящий коммит; если GitHub не разрешит (на старых коммитах другой файл
+      # сборки, а токену сборки нельзя трогать workflow-файлы) — релиз привязывается к текущему коммиту,
+      # а настоящий коммит указывается в тексте.
+      - name: Publish notes for earlier versions
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          grep -v '^#' docs/releases/tags.txt | while read -r TAG SHA; do
+            [ -z "$TAG" ] && continue
+            f="docs/releases/$TAG.md"
+            [ -s "$f" ] || continue
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              gh release edit "$TAG" --title "$TAG" --notes-file "$f" --latest=false && echo "notes: $TAG"
+              continue
+            fi
+            if gh api -X POST "repos/$REPO/git/refs" -f ref="refs/tags/$TAG" -f sha="$SHA" >/dev/null 2>&1; then
+              gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$f" --latest=false && echo "release: $TAG @ $SHA"
+            else
+              { cat "$f"; printf '\n_Код этой версии: коммит %s._\n' "$SHA"; } > /tmp/notes.md
+              gh release create "$TAG" --target "${{ github.sha }}" --title "$TAG" --notes-file /tmp/notes.md --latest=false \
+                && echo "release (current commit): $TAG, real commit $SHA"
+            fi
+          done
