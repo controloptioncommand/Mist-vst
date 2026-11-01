@@ -183,6 +183,15 @@ void IconButton::paintButton (juce::Graphics& g, bool over, bool down)
             g.drawEllipse (kx - 2.6f, y - 2.6f, 5.2f, 5.2f, 1.3f);
         }
     }
+    else if (kind == Dice)
+    {
+        // игральный кубик: квадрат со скруглением и пять точек
+        auto d = juce::Rectangle<float> (16.0f, 16.0f).withCentre (c);
+        g.drawRoundedRectangle (d, 3.5f, 1.4f);
+        const float o = 4.3f, pr = 1.5f;
+        for (auto pt : { juce::Point<float> (-o, -o), { o, -o }, { 0, 0 }, { -o, o }, { o, o } })
+            g.fillEllipse (c.x + pt.x - pr, c.y + pt.y - pr, pr * 2, pr * 2);
+    }
     else
     {
         const float d = kind == Prev ? 1.0f : -1.0f;
@@ -259,7 +268,9 @@ MistEditor::MistEditor (MistProcessor& p)
     statusLabel.setFont (LnF::mono (LnF::Type::footnote));
     styleLabel (statusLabel, true);
     statusLabel.setJustificationType (juce::Justification::centredRight);
-    for (juce::Component* c : std::initializer_list<juce::Component*> { &drone, &interp, &oversampling, &statusLabel })
+    dice.setDescription ("Randomizes the timbre: algorithm, ratios, envelopes, filter and LFOs. Master, samples and modes stay as they are.");
+    dice.onClick = [this] { randomizePatch (proc, rng); };
+    for (juce::Component* c : std::initializer_list<juce::Component*> { &drone, &interp, &oversampling, &dice, &statusLabel })
         content.addAndMakeVisible (c);
 
     content.addChildComponent (about);
@@ -557,6 +568,8 @@ void MistEditor::resized()
     interp.setBounds (b.removeFromLeft (172).withSizeKeepingCentre (172, 28));
     b.removeFromLeft (8);
     oversampling.setBounds (b.removeFromLeft (156).withSizeKeepingCentre (156, 28));
+    b.removeFromLeft (8);
+    dice.setBounds (b.removeFromLeft (32).withSizeKeepingCentre (32, 32));
     statusLabel.setBounds (b);
 }
 

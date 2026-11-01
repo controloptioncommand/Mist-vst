@@ -1,53 +1,138 @@
-# Mist — sample-based FM synth
+<p align="center">
+  <img src="docs/assets/banner.png" alt="Mist — sample-based FM synth. Pixel logo, a loudness-coloured waveform and a −24…0 dB legend on a dark background." width="100%">
+</p>
 
-Личный VST3/AU-инструмент: 6 операторов, фазовая модуляция, где источником каждого оператора может быть семпл.
+<p align="center">
+  <img src="https://img.shields.io/badge/version-1.01-FF6B2C?style=flat-square&labelColor=18191C" alt="version 1.01">
+  <img src="https://img.shields.io/badge/macOS-Apple%20Silicon-EDEDE9?style=flat-square&labelColor=18191C" alt="macOS, Apple Silicon">
+  <img src="https://img.shields.io/badge/formats-VST3%20%C2%B7%20AU-8EA0FF?style=flat-square&labelColor=18191C" alt="VST3 and AU">
+  <img src="https://img.shields.io/badge/vibe-coded-FF7AA2?style=flat-square&labelColor=18191C" alt="vibe-coded">
+</p>
 
-## Возможности (v0.1)
+<p align="center">
+  <a href="https://github.com/controloptioncommand/Mist/releases/latest/download/Mist-macOS.zip"><b>⬇ Скачать Mist для macOS</b></a>
+</p>
 
-- **6 операторов**, у каждого режим:
-  - **Wave** — band-limited wavetable. Без семпла это встроенная таблица (Sine → Sine+Oct → Tri → Square → Saw → Pulse → Narrow → Formant). С семплом таблица из 64 кадров нарезается по найденной высоте тона. **Scan** двигает кадр.
-  - **Sample** — воспроизведение семпла, фазовая модуляция сдвигает позицию чтения. Есть start, петля (Forward / Ping-Pong) с кроссфейдом, reverse, root и keytrack.
-- **32 алгоритма** и режим **Matrix**: любой оператор модулирует любой (36 ячеек), выход каждого оператора в микс регулируется отдельно. Кнопка «Edit as Matrix» переносит текущий алгоритм в матрицу.
-- Feedback на каждом операторе. Ratio / Fine / Detune / Fixed Hz.
+---
+
+**Mist** — вайбкод-плагин: синтезатор на частотной (фазовой) модуляции, где вместо синусов звучат ваши семплы. Его целиком написали в диалоге с ИИ. Человек отвечал за идею, дизайн и уши, машина — за C++.
+
+Кидаете на оператор запись дождя, голоса, плёночного шипения или скрипки, связываете операторы в цепочку — и один семпл начинает «раскачивать» другой. Получаются дроны, пэды, металлические колокола, шевелящиеся текстуры и прочий саунд-дизайн, который трудно описать словами.
+
+<p align="center">
+  <img src="docs/assets/ui_rubber_scope.png" alt="Главное окно в тёмной теме Rubber: стеклянный тулбар, вид Scope с плотной волной, колонка операторов Op1–Op6 и панель оператора с семью ручками." width="100%">
+</p>
+
+## Что внутри
+
+### 6 операторов, у каждого три режима
+
+| Режим | Что делает |
+|---|---|
+| **Sample PM** | Семпл проигрывается, а модуляторы сдвигают точку чтения в нём, сэмпл за сэмплом. Живые, «грязные» текстуры. Есть start, петля Forward / Ping-Pong с кроссфейдом, reverse, root и keytrack. |
+| **Scrub** | Из семпла нарезается wavetable на 64 кадра по найденной высоте тона. Ручка Position прокручивает по нему. Чистый тон без алиасинга — для пэдов. На графике остаются призрачные следы прошлых положений. |
+| **Grain** | Перекрывающиеся зёрна из выбранного места семпла. Модуляторы изгибают каждое зерно. Ручки Size, Density, Spray — для облаков и шумных дронов. |
+
+Без семпла оператор играет встроенную таблицу: Sine → Sine+Oct → Tri → Square → Saw → Pulse → Narrow → Formant.
+
+Высота тона семпла определяется автоматически. Семплы хранятся **внутри** пресета и проекта Ableton (FLAC), поэтому исходные файлы можно удалить или переложить.
+
+### Маршрутизация
+
+- **32 алгоритма**: от классического стека до колец, перекрёстных пар и «хаоса» с обратными связями.
+- Режим **Matrix**: любой оператор модулирует любой, 36 ячеек плюс отдельный выход каждого оператора. Кнопка «Edit as Matrix» переносит текущий алгоритм в матрицу.
+- **Feedback** на каждом операторе.
+
+<p align="center">
+  <img src="docs/assets/ui_rubber_waves.png" alt="Вкладка Routing: схема алгоритма Cross Pairs и матрица модуляции 6×6. Главный вид — Waves, хребтовые линии с оранжевой передней линией." width="100%">
+</p>
+
+### Звук и модуляция
+
 - Огибающая DAHDSR на каждом операторе, времена до 30 с.
-- 8 голосов полифонии, режимы Mono и Legato, glide, unison до 8 голосов с detune и стерео-разбросом.
-- Фильтр: LP12, LP24, BP, HP, Notch, с drive, keytrack и модуляционной огибающей.
-- 2 LFO: 7 форм, синхронизация с темпом и транспортом.
+- 8 голосов, режимы Mono и Legato, glide, unison до 8 голосов с detune и стерео-разбросом.
+- Фильтр LP12 / LP24 / BP / HP / Notch с drive, keytrack и отдельной огибающей.
+- 2 LFO, 7 форм, синхронизация с темпом и транспортом Ableton.
 - Mod Matrix на 8 слотов. Источники: LFO, Mod Env, Velocity, Key, Mod Wheel, Aftertouch, Random. Назначения: глобальные параметры, а также Level / Pitch / Scan / Feedback каждого оператора.
-- Пресеты (`~/Music/Mist/Presets/*.mist`) хранят семплы внутри файла (FLAC). Проект DAW тоже хранит семплы внутри.
-- Окно масштабируется от 50% до 200%.
+- **Drone**: ноты залипают, пока режим включён. Можно отпустить клавиши и крутить ручки.
+- Интерполяция Linear / Hermite и оверсемплинг 1× / 2× / 4× против алиасинга.
+- 🎲 **Кубик**: случайный патч. Меняет алгоритм, отношения частот, огибающие, фильтр и LFO в безопасных пределах. Громкость, семплы и режимы не трогает, поэтому тишины или перегруза не будет.
 
-## Руководство
+### Главный вид
 
-Подробное руководство: [docs/Mist-Manual.pdf](docs/Mist-Manual.pdf). Оно же лежит в архиве релиза.
-Исходник: `docs/manual/build.py` → `node docs/manual/print.js`.
+Три вкладки результата:
 
-## Установка на macOS
+- **Scope** — плотная волна: по полоске на каждый пиксель, цвет по громкости от −24 до 0 дБ, направляющие −6 и −12 дБ.
+- **Waves** — хребтовые линии, история волны «стопкой».
+- **Spectrum** — спектрограмма в той же цветовой шкале.
 
-1. Откройте вкладку **Actions** репозитория, выберите последний успешный запуск **Build macOS** и скачайте артефакт `Mist-macOS`.
-2. Распакуйте архив и выполните в Терминале:
+<p align="center">
+  <img src="docs/assets/ui_rubber_spectrum.png" alt="Вид Spectrum и вкладка Mod Matrix в тёмной теме." width="100%">
+</p>
+
+### Две темы
+
+**Oxygen** — светлая, **Rubber** — тёмная. Можно следовать системной теме macOS или выбрать вручную: иконка настроек → Appearance. Один резкий оранжевый сигнальный цвет, стекло только на функциональных элементах, никаких теней и декоративных градиентов. Учитываются системные «Уменьшить прозрачность» и «Уменьшить движение».
+
+<p align="center">
+  <img src="docs/assets/ui_oxygen_scope.png" alt="То же окно в светлой теме Oxygen." width="100%">
+</p>
+
+### Сова 🦉
+
+Да, внутри есть игра. Клик по пиксельному логотипу **Mist** открывает страницу About, а кнопка **Play** запускает бегалку: пиксельная сова-сипуха 12×13 прыгает через пни и стог сена под луной. Пробел, ↑ или клик — прыжок. Рекорд хранится до закрытия плагина. Проигрыш дружелюбный: сова просто садится, и можно нажать «Try again».
+
+<p align="center">
+  <img src="docs/assets/about_rubber.png" alt="Страница About: большой пиксельный логотип Mist, версия v1.01 и дата, оранжевая кнопка Play с маленькой совой." width="49%">
+  <img src="docs/assets/game_rubber.png" alt="Игра: пиксельная оранжевая сова стоит на линии земли, вверху луна, звёзды и счёт HI 00000 / 00000." width="49%">
+</p>
+
+## Установка
+
+1. Скачайте **[Mist-macOS.zip](https://github.com/controloptioncommand/Mist/releases/latest/download/Mist-macOS.zip)** и распакуйте двойным кликом.
+2. Откройте Терминал и выполните:
    ```bash
    bash ~/Downloads/Mist-macOS/install-mac.sh
    ```
-3. В Ableton Live: **Settings → Plug-Ins → Rescan**.
+   Скрипт кладёт `Mist.vst3` и `Mist.component` в `~/Library/Audio/Plug-Ins` и снимает карантин macOS: плагин не подписан сертификатом Apple.
+3. Перезапустите Ableton. Если Mist не появился: Settings → Plug-Ins → Rescan.
 
-## Сборка вручную
+Нужен Mac на Apple Silicon и macOS 11 или новее. Каждое изменение в `main` автоматически собирается, проходит pluginval и auval и выкладывается в [Releases](https://github.com/controloptioncommand/Mist/releases).
+
+## Как пользоваться за минуту
+
+1. Перетащите аудиофайл на карточку **Op 1**.
+2. Сверху выберите режим: **Sample PM**, **Scrub** или **Grain**.
+3. Вкладка **Routing**: выберите алгоритм, например *24 Ring 6* для дронов.
+4. Ручка **Depth** у модуляторов задаёт, насколько сильно они «гнут» несущую.
+5. Включите **Drone**, сыграйте низкую ноту и отпустите.
+6. Если надоело — бросьте кубик 🎲.
+
+Пресеты лежат в `~/Music/Mist/Presets/*.mist`. Сохранить пресет: иконка настроек → Save preset.
+
+## Сборка из исходников
 
 ```bash
 cmake -B build -G Xcode
 cmake --build build --config Release --target Mist_VST3 Mist_AU
 ```
 
-Офлайн-тест (рендер пресетов в WAV, проверка NaN, перегрузки и скорости):
+Офлайн-тест рендерит пресеты и все 32 алгоритма в WAV, проверяет NaN, перегруз и скорость, бросает кубик 40 раз и снимает скриншоты интерфейса:
 
 ```bash
 cmake -B build -DMIST_BUILD_TESTS=ON && cmake --build build --target MistRenderTest
 ./build/MistRenderTest_artefacts/Release/MistRenderTest ./render
 ```
 
-## Структура
+## Устройство
 
-- `Source/DSP/` — синтез: `Synth` (голоса, операторы, LFO), `Wavetable`, `SampleAsset` (загрузка, детектор высоты тона, нарезка таблиц), `Primitives` (огибающая, SVF-фильтр).
-- `Source/Algorithms.cpp` — таблица 32 алгоритмов.
-- `Source/Params.cpp` — все параметры.
-- `Source/UI/` — интерфейс. Цвета собраны в `LookAndFeel.h`, интерфейс рисуется в базовом размере 1280×820 и масштабируется.
+| Где | Что |
+|---|---|
+| `Source/DSP/` | Синтез: голоса, операторы, зёрна, LFO, wavetable, детектор высоты тона, огибающие, фильтр |
+| `Source/Algorithms.cpp` | 32 алгоритма |
+| `Source/Randomizer.cpp` | Кубик и его «безопасные» диапазоны |
+| `Source/UI/` | Интерфейс, темы Oxygen / Rubber, главный вид, About и сова |
+
+Написан на C++ и [JUCE 8](https://juce.com). Логотип набран шрифтом [Medeo Pixel](https://github.com/DNFDEVS/medeo-font) (SIL Open Font License, файл лицензии — `Resources/Fonts/OFL.txt`).
+
+<p align="center"><sub>made by nnn · vibe-coded with Claude</sub></p>

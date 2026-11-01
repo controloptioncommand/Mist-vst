@@ -57,7 +57,6 @@ jobs:
           cp -R build/Mist_artefacts/Release/VST3/Mist.vst3 dist/
           cp -R build/Mist_artefacts/Release/AU/Mist.component dist/
           cp scripts/install-mac.sh dist/
-          cp docs/Mist-Manual.pdf dist/
           cp "$RUNNER_TEMP/render"/*.wav dist/ 2>/dev/null || true
           cd dist && zip -qry ../Mist-macOS.zip .
 

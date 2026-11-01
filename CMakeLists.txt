@@ -44,6 +44,7 @@ set(MIST_SOURCES
     Source/Params.cpp
     Source/Algorithms.cpp
     Source/PresetManager.cpp
+    Source/Randomizer.cpp
     Source/FactoryPresets.cpp
     Source/DSP/Wavetable.cpp
     Source/DSP/SampleAsset.cpp

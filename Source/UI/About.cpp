@@ -236,16 +236,13 @@ void GameView::paint (juce::Graphics& g)
 }
 
 // ===========================================================================
-void AboutPage::CloseButton::paintButton (juce::Graphics& g, bool over, bool)
+void AboutPage::BackLogo::paintButton (juce::Graphics& g, bool over, bool)
 {
-    auto r = getLocalBounds().toFloat();
-    LnF::drawGlass (g, r, r.getHeight() * 0.5f);
-    if (over) { g.setColour (Colours::ink.withAlpha (0.05f)); g.fillEllipse (r); }
-    const auto c = r.getCentre();
-    g.setColour (Colours::ink);
-    g.drawLine (c.x - 5, c.y - 5, c.x + 5, c.y + 5, 1.6f);
-    g.drawLine (c.x - 5, c.y + 5, c.x + 5, c.y - 5, 1.6f);
-    if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, r, r.getHeight() * 0.5f);
+    // маленький логотип — клик возвращает в плагин
+    g.setColour (over ? Colours::ink.withAlpha (0.7f) : Colours::ink);
+    g.setFont (LnF::pixel (26.0f));
+    g.drawText ("Mist", getLocalBounds(), juce::Justification::centredLeft);
+    if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, getLocalBounds().toFloat(), 8.0f);
 }
 
 void AboutPage::PlayButton::paintButton (juce::Graphics& g, bool over, bool down)
@@ -256,15 +253,13 @@ void AboutPage::PlayButton::paintButton (juce::Graphics& g, bool over, bool down
     if (down) fill = fill.overlaidWith (Colours::onSignal.withAlpha (0.12f));
     g.setColour (fill);
     g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
-    // маленькая сова внутри
-    g.setFont (LnF::font (LnF::Type::body, true));
-    const int textW = juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), "Play");
-    const int owlW = 12 * 2;
-    const int total = owlW + 8 + textW;
-    const int x0 = (getWidth() - total) / 2;
-    drawOwl (g, { x0, (getHeight() - 26) / 2 }, 2, 0);
+    // маленькая сова слева, текст справа от неё — фиксированная раскладка, без наложения
+    const int owlW = 12 * 2, owlX = 24;
+    drawOwl (g, { owlX, (getHeight() - 26) / 2 }, 2, 0);
     g.setColour (Colours::onSignal);
-    g.drawText ("Play", juce::Rectangle<int> (x0 + owlW + 8, 0, textW + 4, getHeight()), juce::Justification::centredLeft);
+    g.setFont (LnF::font (LnF::Type::body, true));
+    g.drawText ("Play", juce::Rectangle<int> (owlX + owlW + 12, 0, getWidth() - (owlX + owlW + 12) - 12, getHeight()),
+                juce::Justification::centredLeft, false);
     if (hasKeyboardFocus (false)) LnF::drawFocusRing (g, r.expanded (3.0f), r.getHeight() * 0.5f + 3.0f);
 }
 
@@ -288,11 +283,11 @@ AboutPage::AboutPage()
 {
     setTitle ("About Mist");
     setDescription (juce::String ("Mist ") + AboutInfo::version + ", " + AboutInfo::date + ", " + AboutInfo::author);
-    addAndMakeVisible (close);
+    addAndMakeVisible (back);
     addAndMakeVisible (play);
     addChildComponent (closeGame);
     addChildComponent (game);
-    close.onClick = [this] { showGame (false); if (onClose) onClose(); };
+    back.onClick = [this] { showGame (false); if (onClose) onClose(); };
     play.onClick = [this] { showGame (true); };
     closeGame.onClick = [this] { showGame (false); };
 }
@@ -330,13 +325,9 @@ void AboutPage::paint (juce::Graphics& g)
         for (int x = 12; x < getWidth(); x += 16)
             g.fillRect (x, y, 1, 1);
 
-    // маленький логотип
-    g.setColour (Colours::ink);
-    g.setFont (LnF::pixel (26.0f));
-    g.drawText ("Mist", juce::Rectangle<int> (28, 22, 120, 30), juce::Justification::centredLeft);
-
     // большое «Mist»
-    const float targetW = gameMode ? 150.0f : 450.0f;
+    g.setColour (Colours::ink);
+    const float targetW = gameMode ? 150.0f : 320.0f;
     auto f = LnF::pixel (100.0f);
     const float w100 = (float) juce::GlyphArrangement::getStringWidth (f, "Mist");
     f = LnF::pixel (100.0f * targetW / juce::jmax (1.0f, w100));
@@ -345,13 +336,12 @@ void AboutPage::paint (juce::Graphics& g)
 
     drawVersion (g, versionLine);
 
-    if (! gameMode)
-    {
-        g.setColour (Colours::ink2);
-        g.setFont (LnF::font (LnF::Type::footnote));
-        g.drawText (AboutInfo::author, versionLine.translated (0.0f, 20.0f), juce::Justification::centred);
-    }
-    else
+    // никнейм — в левом нижнем углу
+    g.setColour (Colours::ink2);
+    g.setFont (LnF::font (LnF::Type::footnote));
+    g.drawText (AboutInfo::author, juce::Rectangle<int> (28, getHeight() - 40, 300, 16), juce::Justification::centredLeft);
+
+    if (gameMode)
     {
         g.setColour (Colours::ink2);
         g.setFont (LnF::font (LnF::Type::footnote));
@@ -362,13 +352,13 @@ void AboutPage::paint (juce::Graphics& g)
 void AboutPage::resized()
 {
     const float W = (float) getWidth(), H = (float) getHeight();
-    close.setBounds ((int) W - 24 - 40, 18, 40, 40);
+    back.setBounds (24, 16, 84, 40);
 
     if (! gameMode)
     {
-        bigLogo = { 0.0f, H * 0.30f, W, 190.0f };
+        bigLogo = { 0.0f, H * 0.33f, W, 140.0f };
         versionLine = { 0.0f, bigLogo.getBottom() + 4.0f, W, 18.0f };
-        play.setBounds ((int) (W * 0.5f) - 70, (int) versionLine.getBottom() + 34, 140, 40);
+        play.setBounds ((int) (W * 0.5f) - 66, (int) versionLine.getBottom() + 28, 132, 40);
     }
     else
     {

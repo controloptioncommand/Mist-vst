@@ -3,6 +3,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "FactoryPresets.h"
+#include "Randomizer.h"
 
 using namespace mist;
 
@@ -144,6 +145,26 @@ int main (int argc, char** argv)
         if (! st.finite || st.peak > 1.0f) report ("algo " + juce::String (a), st);
     }
     std::cout << "  worst realtime factor: x" << juce::String (worstRt, 1) << "\n";
+
+    std::cout << "== Randomizer: 40 random patches must be audible, finite and below 0 dBFS\n";
+    {
+        juce::Random rng (7);
+        int silent = 0;
+        float worstPeak = 0.0f;
+        for (int k = 0; k < 40; ++k)
+        {
+            p.presets.initPatch();
+            if (k % 2) { setParam (p, "filterOn", 1.0f); setParam (p, "filterType", (float) (k % 5)); }
+            randomizePatch (p, rng);
+            auto st = render (p, { 48, 55, 60 }, 1.5, 0.3, {});
+            if (st.rms < 1e-3) { ++silent; std::cout << "  silent patch #" << k << " algo " << p.apvts.getRawParameterValue ("algorithm")->load() << "\n"; }
+            CHECK (st.finite, "random patch produced NaN");
+            worstPeak = juce::jmax (worstPeak, st.peak);
+        }
+        std::cout << "  silent: " << silent << "/40, worst peak " << worstPeak << "\n";
+        CHECK (silent == 0, "randomizer produced silent patches");
+        CHECK (worstPeak <= 1.0f, "randomizer peak above 0 dBFS");
+    }
 
     std::cout << "== Sample operator\n";
     auto sampleFile = makeTestSample (outDir);

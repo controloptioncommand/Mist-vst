@@ -7,6 +7,7 @@
 #include "UI/RoutingPanel.h"
 #include "UI/ModulationPanel.h"
 #include "UI/About.h"
+#include "Randomizer.h"
 
 namespace mist
 {
@@ -73,7 +74,7 @@ public:
 class IconButton : public juce::Button
 {
 public:
-    enum Kind { Settings, Prev, Next };
+    enum Kind { Settings, Prev, Next, Dice };
     IconButton (Kind k, const juce::String& title) : juce::Button (title), kind (k) { setTitle (title); }
     void paintButton (juce::Graphics& g, bool over, bool down) override;
 
@@ -150,6 +151,8 @@ private:
 
     // подвал
     ParamToggle drone { "Drone" };
+    IconButton dice { IconButton::Dice, "Randomize sound" };
+    juce::Random rng;
     PillChoice interp, oversampling;
     juce::Label statusLabel;
 

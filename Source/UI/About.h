@@ -55,9 +55,9 @@ public:
     std::function<void()> onClose;
 
 private:
-    struct CloseButton : juce::Button
+    struct BackLogo : juce::Button
     {
-        CloseButton() : juce::Button ("Close") { setTitle ("Close About"); }
+        BackLogo() : juce::Button ("Mist") { setTitle ("Back to Mist"); }
         void paintButton (juce::Graphics&, bool over, bool down) override;
     };
     struct PlayButton : juce::Button
@@ -73,7 +73,7 @@ private:
 
     void drawVersion (juce::Graphics& g, juce::Rectangle<float> r);
 
-    CloseButton close;
+    BackLogo back;
     PlayButton play;
     CapsuleButton closeGame { "Close game" };
     GameView game;
