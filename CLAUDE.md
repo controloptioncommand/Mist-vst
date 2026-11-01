@@ -26,6 +26,11 @@ Mist — вайбкод VST3/AU-синтезатор (sample-based FM) для ma
 - В README, мануале, патчноутах и любой другой публичной документации **не упоминать** эффект «Туман» на логотипе About, сову, игру и скрытые ссылки на странице About (версия → GitHub, «made by nnn» → Telegram). Это пасхалки, их находят сами.
 - Скриншоты игры и эффекта «Туман» в документацию не добавлять.
 
+## Мануал
+- `docs/Mist-manual.pdf` — руководство пользователя (рус.), кладётся в архив релиза. Исходник — `docs/manual/Mist-manual.html`.
+- **Обновлять мануал** при любом изменении интерфейса, параметров, диапазонов или поведения: поправить текст в HTML и пересобрать `bash docs/manual/build.sh` (снимает свежие скриншоты рендер-тестом и печатает PDF). Пересобранный PDF — посмотреть глазами.
+- Названия ручек и диапазоны сверять с кодом (`Source/Params.cpp`, `Source/UI/`), не писать по памяти.
+
 ## Версии и патчноуты
 - Текущая версия — в файле `VERSION` (схема: v1, v1.01 … v2, v2.01 …). На странице About она же в `Source/UI/About.h` (`AboutInfo::version`, `AboutInfo::date`).
 - **У каждой версии обязателен патчноут** `docs/releases/<версия>.md` — без него CI не соберёт релиз.
@@ -53,4 +58,4 @@ cmake -B build -DMIST_BUILD_TESTS=ON && cmake --build build --target MistRenderT
 - `Source/DSP/` — синтез (голоса, операторы, зёрна, LFO, wavetable, детектор высоты, огибающие, фильтр)
 - `Source/Algorithms.cpp` — 32 алгоритма; `Source/Randomizer.cpp` — кубик
 - `Source/UI/` — интерфейс: `LookAndFeel` (темы, шрифты Medeo, плашки, ручки), `Visualizer`, `OperatorPanel`, `RoutingPanel`, `ModulationPanel`, `About` (страница About, «Туман», игра)
-- `Tests/RenderTest.cpp` — офлайн-тест; `scripts/` — установка и проверка приватности; `docs/` — картинки README, патчноуты, дизайн
+- `Tests/RenderTest.cpp` — офлайн-тест; `scripts/` — установка и проверка приватности; `docs/` — картинки README, патчноуты, дизайн, мануал (`docs/manual/`)

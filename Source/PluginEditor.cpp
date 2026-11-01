@@ -230,7 +230,7 @@ MistEditor::MistEditor (MistProcessor& p)
     // тулбар
     for (juce::Component* c : std::initializer_list<juce::Component*> { &logo, &prevPreset, &presetName, &nextPreset, &modeSwitch, &outMeter, &settingsButton })
         content.addAndMakeVisible (c);
-    presetName.getProperties().set ("noOutline", true);
+    presetName.getProperties().set ("textOnly", true);
     presetName.setTitle ("Preset");
     logo.onClick = [this] { showAbout (true); };
     prevPreset.onClick = [this] { proc.presets.loadNext (-1); };

@@ -282,6 +282,12 @@ void MistLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& b, 
     r = r.reduced (0.5f);
     const float rad = juce::jmin (r.getHeight() * 0.5f, 8.0f);   // контролы — радиус 8, капсулы только у сегментов и переключателей
 
+    if (b.getProperties()["textOnly"])
+    {
+        // кнопка-текст (имя пресета): без подложки и рамки, наведение — цветом текста
+        if (b.hasKeyboardFocus (false)) drawFocusRing (g, r, rad);
+        return;
+    }
     if (b.getProperties()["plate"])
         drawPlate (g, r, rad);
     else
@@ -291,20 +297,20 @@ void MistLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& b, 
         if (down) base = base.overlaidWith (Colours::ink.withAlpha (0.08f));
         g.setColour (base);
         g.fillRoundedRectangle (r, rad);
-        if (! b.getProperties()["noOutline"])
-        {
-            g.setColour (Colours::outline);
-            g.drawRoundedRectangle (r, rad, 1.0f);
-        }
+        g.setColour (Colours::outline);
+        g.drawRoundedRectangle (r, rad, 1.0f);
     }
     if (b.hasKeyboardFocus (false))
         drawFocusRing (g, r.expanded (2.0f), rad + 2.0f);
 }
 
-void MistLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton& b, bool, bool)
+void MistLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton& b, bool over, bool down)
 {
     g.setFont (getTextButtonFont (b, b.getHeight()));
-    g.setColour (! b.isEnabled() ? Colours::ink2 : b.getToggleState() ? Colours::onSignal : Colours::ink);
+    if (b.getProperties()["textOnly"])
+        g.setColour (! b.isEnabled() ? Colours::ink2 : (over || down) ? Colours::signal : Colours::ink);
+    else
+        g.setColour (! b.isEnabled() ? Colours::ink2 : b.getToggleState() ? Colours::onSignal : Colours::ink);
     g.drawText (b.getButtonText(), b.getLocalBounds().reduced (8, 0), juce::Justification::centred, true);
 }
 

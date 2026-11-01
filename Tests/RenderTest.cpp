@@ -292,6 +292,12 @@ int main (int argc, char** argv)
             le->setView (0, 2, 0);  pump (90, first); first = false; shoot ("ui_" + tn + "_scope");
             le->setView (2, 0, 1);  pump (60, false); shoot ("ui_" + tn + "_waves");
             le->setView (6, 1, 0);  pump (60, false); shoot ("ui_" + tn + "_spectrum");
+            if (theme == ThemeId::Rubber && juce::SystemStats::getEnvironmentVariable ("MIST_MANUAL_SHOTS", {}).isNotEmpty())
+            {
+                // скриншоты всех вкладок для мануала (docs/manual/build.sh)
+                for (int pg = 0; pg < 7; ++pg) { le->setView (pg, 2, pg == 2 ? 1 : 0); pump (20, false); shoot ("page" + juce::String (pg) + "_" + tn); }
+                le->setView (6, 1, 0);
+            }
             {
                 // скорость: 30 кадров отрисовки главного окна в виде Spectrum
                 const auto t0 = juce::Time::getMillisecondCounterHiRes();

@@ -88,6 +88,8 @@
    Скрипт кладёт `Mist.vst3` и `Mist.component` в `~/Library/Audio/Plug-Ins` и снимает карантин macOS: плагин не подписан сертификатом Apple.
 3. Перезапустите Ableton. Если Mist не появился: Settings → Plug-Ins → Rescan.
 
+Подробное руководство — **[Mist-manual.pdf](docs/Mist-manual.pdf)**, оно же лежит в архиве релиза.
+
 Нужен Mac на Apple Silicon и macOS 11 или новее. Каждое изменение в `main` автоматически собирается, проходит pluginval и auval и выкладывается в [Releases](https://github.com/controloptioncommand/Mist-vst/releases).
 
 ## Как пользоваться за минуту
