@@ -269,7 +269,7 @@ FM Amount, тем богаче и «грязнее» звук.</p>
 
 <div style="break-inside:avoid"><h2>2. Установка и обновление</h2>
 <ol>
-<li>Скачайте последнюю сборку (нужен вход в GitHub):<br><span class="mono">github.com/controloptioncommand/loom/releases/latest/download/Mist-macOS.zip</span></li>
+<li>Скачайте последнюю сборку (нужен вход в GitHub):<br><span class="mono">github.com/controloptioncommand/mist/releases/latest/download/Mist-macOS.zip</span></li>
 <li>Распакуйте архив двойным кликом — появится папка <b>Mist-macOS</b> в «Загрузках».</li>
 <li>Откройте Терминал (Cmd + пробел → «Терминал») и выполните:</li>
 </ol>

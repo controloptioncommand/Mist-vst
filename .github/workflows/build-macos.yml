@@ -18,8 +18,8 @@ jobs:
       - name: Cache JUCE
         uses: actions/cache@v4
         with:
-          path: build/_deps
-          key: juce-8.0.10-${{ runner.os }}
+          path: build/_deps/juce-src
+          key: juce-src-8.0.10-${{ runner.os }}-${{ github.repository }}
 
       - name: Configure
         run: cmake -B build -G Xcode -DMIST_BUILD_TESTS=ON
@@ -67,7 +67,7 @@ jobs:
           path: Mist-macOS.zip
 
       # Публикация: постоянная ссылка
-      # https://github.com/controloptioncommand/loom/releases/latest/download/Mist-macOS.zip
+      # https://github.com/controloptioncommand/mist/releases/latest/download/Mist-macOS.zip
       - name: Publish release
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
