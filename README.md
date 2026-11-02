@@ -124,6 +124,12 @@ cmake -B build -DMIST_BUILD_TESTS=ON && cmake --build build --target MistRenderT
 ./build/MistRenderTest_artefacts/Release/MistRenderTest ./render
 ```
 
+Руководство в PDF собирается из `docs/manual/Mist-manual.html`: рендер-тест снимает свежие скриншоты, Chromium печатает PDF в `docs/Mist-manual.pdf` (нужны Python 3 с Pillow и Node.js с Playwright). Пересобирать при каждом изменении интерфейса, параметров или поведения:
+
+```bash
+bash docs/manual/build.sh
+```
+
 ## Устройство
 
 | Где | Что |
