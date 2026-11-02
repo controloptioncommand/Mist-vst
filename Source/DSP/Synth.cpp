@@ -342,7 +342,8 @@ void Voice::renderChunk (float* L, float* R, int n, int lfoIndex, const BlockCon
         if (std::abs (targetPitch - pitch) <= step) { pitch = targetPitch; glideStep = 0; }
         else pitch += (targetPitch > pitch ? step : -step);
     }
-    const float basePitch = pitch + ctx.bendSemis + dst[DstPitch] * 24.0f;
+    const float basePitch = pitch + s.transpose + ctx.bendSemis + dst[DstPitch] * 24.0f;
+    const float transposeMul = std::exp2 (s.transpose / 12.0f);   // для Fixed и семплов без keytrack
     const float baseHz = midiToHz (basePitch);
     const float fmAmt = juce::jlimit (0.0f, 4.0f, s.fmAmount + dst[DstFMAmount] * 2.0f) * kModScale;
 
@@ -396,16 +397,16 @@ void Voice::renderChunk (float* L, float* R, int n, int lfoIndex, const BlockCon
         {
             const float rootHz = midiToHz ((float) o.root);
             float hz;
-            if (o.fixed)            hz = o.fixedHz;
+            if (o.fixed)            hz = o.fixedHz * transposeMul;
             else if (o.keytrack)    hz = baseHz * o.ratio;
-            else                    hz = rootHz * o.ratio;
+            else                    hz = rootHz * o.ratio * transposeMul;
             hz *= o.detuneMul * opPitchMul;
             inc[i] = (double) hz / rootHz * o.asset->fileSampleRate / sr;   // сэмплов файла за сэмпл
             mip[i] = 0;
         }
         else
         {
-            const float hz = (o.fixed ? o.fixedHz : baseHz * o.ratio) * o.detuneMul * opPitchMul;
+            const float hz = (o.fixed ? o.fixedHz * transposeMul : baseHz * o.ratio) * o.detuneMul * opPitchMul;
             inc[i] = hz / sr;
             mip[i] = Wavetable::mipForIncrement (inc[i] * (U > 1 ? std::exp2 (uniDet / 1200.0f) : 1.0f));
             cur[i] = o.table->cursor (scan[i], mip[i]);
@@ -429,7 +430,7 @@ void Voice::renderChunk (float* L, float* R, int n, int lfoIndex, const BlockCon
     if (filterOn)
     {
         const float oct = s.filterEnv * modEnv.getLevel() * 6.0f + dst[DstCutoff] * 6.0f
-                        + s.filterKey * (pitch - 60.0f) / 12.0f;
+                        + s.filterKey * (pitch + s.transpose - 60.0f) / 12.0f;
         filter.setCoefs (s.cutoff * std::exp2 (oct), juce::jlimit (0.0f, 1.0f, s.reso + dst[DstReso]), sr);
     }
     const float driveGain = 1.0f + s.drive * 8.0f;
@@ -597,8 +598,32 @@ void Synth::allNotesOff()
     monoStack.clear();
 }
 
+void Synth::releaseUnheld (const Snapshot& s, bool respectPedal)
+{
+    if (s.polyMode != PolyPoly)
+    {
+        monoStack.erase (std::remove_if (monoStack.begin(), monoStack.end(), [this] (int n) { return ! keyDown[n & 127]; }),
+                         monoStack.end());
+        if (monoStack.empty()) voices[0].release();
+    }
+    else
+        for (auto& v : voices)
+            if (v.isActive() && ! v.isReleasing() && ! keyDown[v.getNote() & 127] && ! (respectPedal && sustainPedal))
+                v.release();
+}
+
 void Synth::noteOn (int note, float vel, const Snapshot& s)
 {
+    if (s.hold)
+    {
+        // Hold: если других клавиш не зажато — это новое нажатие, оно заменяет удерживаемые ноты.
+        // Клавиши, нажатые вместе (аккорд), добавляются друг к другу.
+        bool otherDown = false;
+        for (int n = 0; n < 128; ++n)
+            if (n != note && keyDown[n]) { otherDown = true; break; }
+        if (! otherDown) releaseUnheld (s, false);
+    }
+
     const float glideFrom = lastPitch;
     lastPitch = (float) note;
 
@@ -649,7 +674,7 @@ void Synth::noteOn (int note, float vel, const Snapshot& s)
 
 void Synth::noteOff (int note, const Snapshot& s)
 {
-    if (s.drone) return;   // Drone: ноты «залипают» до выключения режима
+    if (s.drone || s.hold) return;   // Drone/Hold: ноты «залипают» (до выключения режима или до нового нажатия в Hold)
     if (s.polyMode != PolyPoly)
     {
         monoStack.erase (std::remove (monoStack.begin(), monoStack.end(), note), monoStack.end());
@@ -720,20 +745,10 @@ void Synth::render (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi, co
         lastPolyMode = snap.polyMode;
     }
 
-    if (lastDrone && ! snap.drone)
-    {
-        // Drone выключили — отпускаем всё, что не зажато физически
-        if (snap.polyMode != PolyPoly)
-        {
-            monoStack.erase (std::remove_if (monoStack.begin(), monoStack.end(), [this] (int n) { return ! keyDown[n & 127]; }),
-                             monoStack.end());
-            if (monoStack.empty()) voices[0].release();
-        }
-        else
-            for (auto& v : voices)
-                if (v.isActive() && ! keyDown[v.getNote() & 127] && ! sustainPedal) v.release();
-    }
-    lastDrone = snap.drone;
+    const bool latch = snap.drone || snap.hold;
+    if (lastLatch && ! latch)
+        releaseUnheld (snap, true);   // Drone/Hold выключили — отпускаем всё, что не зажато физически
+    lastLatch = latch;
 
     for (int l = 0; l < 2; ++l)
         lfo[(size_t) l].process (snap.lfo[l], info, numSamples, lfoValues[l]);

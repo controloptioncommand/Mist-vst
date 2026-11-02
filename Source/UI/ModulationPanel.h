@@ -9,6 +9,7 @@ class FilterPanel : public Section
 public:
     explicit FilterPanel (MistProcessor& p);
     void resized() override;
+    void refresh() { modEnvView.refresh(); }
 
 private:
     ParamToggle on { "On" };
@@ -16,6 +17,7 @@ private:
     ParamKnob cutoff { "Cutoff" }, reso { "Reso" }, env { "Env Amt" }, key { "Key" }, drive { "Drive" };
     ParamKnob ma { "Attack" }, md { "Decay" }, ms { "Sustain" }, mr { "Release" };
     juce::Label modEnvLabel;
+    EnvelopeView modEnvView;
 };
 
 class LfoPanel : public Section
@@ -40,6 +42,7 @@ class ModMatrixPanel : public Section
 {
 public:
     explicit ModMatrixPanel (MistProcessor& p);
+    void setOpNames (const juce::StringArray& names);   // «Op3 Level» → «Kick Level»
     void resized() override;
 
 private:

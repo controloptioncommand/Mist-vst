@@ -99,7 +99,11 @@ void GameView::jump()
 {
     if (state == State::Over) { reset(); state = State::Running; return; }
     if (state == State::Ready) state = State::Running;
-    if (owlY <= 0.001f) velY = 4.4f;
+    if (owlY <= 0.001f)
+    {
+        velY = 4.4f;
+        if (onJump) onJump();
+    }
 }
 
 bool GameView::keyPressed (const juce::KeyPress& k)
@@ -449,6 +453,7 @@ AboutPage::AboutPage()
     setTitle ("About Mist");
     setDescription (juce::String ("Mist ") + AboutInfo::version + ", " + AboutInfo::date + ", " + AboutInfo::author);
     addAndMakeVisible (back);
+    game.onJump = [this] { if (onGameJump) onGameJump(); };
     addAndMakeVisible (logoHit);
     addAndMakeVisible (versionLink);
     addAndMakeVisible (authorLink);

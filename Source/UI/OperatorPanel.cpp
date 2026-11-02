@@ -64,14 +64,17 @@ void SampleSlot::refresh()
 {
     const auto role = operatorRole (proc, op);
     const bool filled = hasSample();
-    if (role != cachedRole || filled != reverse.isVisible())
+    const auto name = proc.getOpName (op);
+    if (role != cachedRole || filled != reverse.isVisible() || name != cachedName)
     {
         cachedRole = role;
+        cachedName = name;
         reverse.setVisible (filled);
         resized();
     }
     auto asset = proc.getSample (op);
-    setDescription ("Op " + juce::String (op + 1) + ", " + cachedRole + ", "
+    setTitle ("Op " + juce::String (op + 1) + (proc.getCustomOpName (op).isNotEmpty() ? ", " + proc.getCustomOpName (op) : juce::String()));
+    setDescription (proc.getOpName (op) + ", " + cachedRole + ", "
                     + (asset ? "sample " + asset->name : juce::String ("no sample, drop an audio file here")));
     repaint();
 }
@@ -99,10 +102,16 @@ void SampleSlot::paint (juce::Graphics& g)
     g.setColour (roleCol);
     g.fillEllipse (juce::Rectangle<float> (8.0f, 8.0f).withCentre ({ (float) top.getX() - 7.0f, (float) top.getCentreY() }));
     g.setFont (LnF::font (LnF::Type::callout, true));
-    const juce::String opText = "Op " + juce::String (op + 1) + midDot();
-    const int opW = juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), opText);
+    // имя слота: «Op N» или своё (двойной клик по нему — переименовать)
+    const juce::String nameText = proc.getOpName (op);
+    const int nameW = juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), nameText);
+    const int dotW = juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), midDot());
+    nameArea = top.withWidth (nameW + 1).expanded (2, 3);
     g.setColour (isOn ? Colours::ink : Colours::ink2);
-    g.drawText (opText, top.removeFromLeft (opW + 1), juce::Justification::centredLeft);
+    if (nameEditor == nullptr)
+        g.drawText (nameText + midDot(), top.removeFromLeft (nameW + dotW + 1), juce::Justification::centredLeft);
+    else
+        top.removeFromLeft (nameEditor->getWidth() + 4);
     g.setColour (roleCol);
     const int roleW = juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), cachedRole) + 4;
     g.drawText (cachedRole, top.removeFromLeft (roleW), juce::Justification::centredLeft);
@@ -206,6 +215,7 @@ void SampleSlot::resized()
 
 bool SampleSlot::keyPressed (const juce::KeyPress& k)
 {
+    if (k == juce::KeyPress::F2Key) { startRename(); return true; }
     if (k == juce::KeyPress::returnKey || k == juce::KeyPress::spaceKey)
     {
         if (onSelect) onSelect (op);
@@ -234,6 +244,7 @@ void SampleSlot::mouseDown (const juce::MouseEvent& e)
         juce::PopupMenu m;
         m.addItem (1, "Load sample...");
         m.addItem (2, "Clear sample", proc.getSample (op) != nullptr);
+        m.addItem (3, "Rename...");
         m.addSeparator();
         for (int md : { OpModeSample, OpModeWave, OpModeGrain })
             m.addItem (10 + md, modeName (md), true, (int) param ("mode") == md);
@@ -241,6 +252,7 @@ void SampleSlot::mouseDown (const juce::MouseEvent& e)
         {
             if (res == 1) openFileChooser();
             else if (res == 2) proc.clearSample (op);
+            else if (res == 3) startRename();
             else if (res >= 10)
                 if (auto* p = proc.apvts.getParameter (opId (op, "mode")))
                 {
@@ -254,12 +266,48 @@ void SampleSlot::mouseDown (const juce::MouseEvent& e)
 
 void SampleSlot::mouseDoubleClick (const juce::MouseEvent& e)
 {
-    if (waveArea.contains (e.getPosition())) openFileChooser();
+    if (nameArea.contains (e.getPosition())) startRename();
+    else if (waveArea.contains (e.getPosition())) openFileChooser();
+}
+
+void SampleSlot::startRename()
+{
+    if (nameEditor != nullptr) return;
+    using LnF = MistLookAndFeel;
+    nameEditor = std::make_unique<juce::TextEditor> ("Slot name");
+    nameEditor->setTitle ("Name for Op " + juce::String (op + 1));
+    nameEditor->setDescription ("Enter saves, Escape cancels, an empty name restores Op " + juce::String (op + 1) + ".");
+    nameEditor->setFont (LnF::font (LnF::Type::callout, true));
+    nameEditor->setInputRestrictions (MistProcessor::kMaxOpNameLength);
+    nameEditor->setTextToShowWhenEmpty ("Op " + juce::String (op + 1), Colours::ink2);
+    nameEditor->setIndents (6, 2);
+    nameEditor->setText (proc.getCustomOpName (op), false);
+    nameEditor->setBounds (nameArea.getX() - 4, nameArea.getY() - 1, 150, nameArea.getHeight() + 2);
+    nameEditor->onReturnKey = [this] { finishRename (true); };
+    nameEditor->onEscapeKey = [this] { finishRename (false); };
+    nameEditor->onFocusLost = [this] { finishRename (true); };
+    addAndMakeVisible (*nameEditor);
+    nameEditor->selectAll();
+    nameEditor->grabKeyboardFocus();
+    repaint();
+}
+
+void SampleSlot::finishRename (bool commit)
+{
+    if (nameEditor == nullptr) return;
+    if (commit) proc.setOpName (op, nameEditor->getText());
+    // редактор удаляем асинхронно: мы сейчас внутри его же колбэка
+    nameEditor->onFocusLost = nullptr;
+    nameEditor->setVisible (false);
+    juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<SampleSlot> (this)]
+    {
+        if (safe != nullptr) { safe->nameEditor.reset(); safe->refresh(); }
+    });
 }
 
 void SampleSlot::openFileChooser()
 {
-    chooser = std::make_unique<juce::FileChooser> ("Load sample into Op " + juce::String (op + 1),
+    chooser = std::make_unique<juce::FileChooser> ("Load sample into " + proc.getOpName (op),
                                                    juce::File::getSpecialLocation (juce::File::userMusicDirectory),
                                                    "*.wav;*.aif;*.aiff;*.flac;*.mp3;*.ogg;*.caf;*.m4a");
     chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
@@ -531,13 +579,15 @@ void EnvelopePage::setOperator (int newOp)
     hold.attach (s, opId (op, "hold"));       decay.attach (s, opId (op, "decay"));
     sustain.attach (s, opId (op, "sustain")); release.attach (s, opId (op, "release"));
     view.setColour (Colours::forOperator (op));
+    view.attach (s, { opId (op, "delay"), opId (op, "attack"), opId (op, "hold"), opId (op, "decay"), opId (op, "sustain"),
+                      opId (op, "release"), opId (op, "aCurve"), opId (op, "dCurve"), opId (op, "rCurve") });
+    view.setTitle (proc.getOpName (op) + " envelope");
     refresh();
 }
 
 void EnvelopePage::refresh()
 {
-    auto get = [&] (const char* n) { return getParam (proc, opId (op, n)); };
-    view.setValues (get ("delay"), get ("attack"), get ("hold"), get ("decay"), get ("sustain"), get ("release"));
+    view.refresh();
 }
 
 void EnvelopePage::resized()

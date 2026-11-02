@@ -5,24 +5,53 @@
 namespace mist
 {
 // ---------------------------------------------------------------------------
+// Форма отрезка огибающей: f(p) = (1 − e^(−k·p)) / (1 − e^(−k)), p = 0…1.
+// k = 0 — прямая, k > 0 — быстрый старт и плавный подход к цели, k < 0 — медленный старт.
+// curve (−1…+1) → k = curve · kCurveSteepness. curve 0.5 даёт ту же экспоненту, что огибающие до v3.
+struct EnvSegment
+{
+    double k = 0.0;        // крутизна
+    double norm = 1.0;     // 1 / (1 − e^(−k))
+    bool linear = true;
+
+    void setCurve (float curve) noexcept
+    {
+        k = (double) juce::jlimit (-1.0f, 1.0f, curve) * 13.8;
+        linear = std::abs (k) < 1.0e-3;
+        norm = linear ? 1.0 : 1.0 / (1.0 - std::exp (-k));
+    }
+
+    // значение формы в точке p (для интерфейса)
+    double shape (double p) const noexcept
+    {
+        p = juce::jlimit (0.0, 1.0, p);
+        return linear ? p : (1.0 - std::exp (-k * p)) * norm;
+    }
+};
+
 // Коэффициенты огибающей — считаются один раз на блок и общие для всех голосов
 struct EnvCoefs
 {
     int delaySamples = 0;
     int holdSamples = 0;
-    float attackInc = 1.0f;     // линейный прирост за сэмпл
-    float decayCoef = 0.0f;     // экспонента к sustain
+    double attackSamples = 0;   // длительность полной атаки 0 → 1 (в сэмплах), 0 — мгновенно
+    double decayInc = 1.0;      // прирост фазы спада за сэмпл
+    double releaseInc = 1.0;    // прирост фазы релиза за сэмпл
     float sustain = 1.0f;
-    float releaseCoef = 0.0f;
+    EnvSegment attack, decay, release;
 
-    void set (double sr, float d, float a, float h, float dec, float s, float r)
+    void set (double sr, float d, float a, float h, float dec, float s, float r,
+              float aCurve = 0.0f, float dCurve = 0.5f, float rCurve = 0.5f)
     {
         delaySamples = (int) (d * sr);
         holdSamples = (int) (h * sr);
-        attackInc = a <= 0.0005f ? 1.0f : (float) (1.0 / (a * sr));
-        decayCoef = dec <= 0.0005f ? 0.0f : (float) std::exp (-6.9 / (dec * sr));
+        attackSamples = a <= 0.0005f ? 0.0 : a * sr;
+        decayInc = dec <= 0.0005f ? 1.0 : 1.0 / (dec * sr);
         sustain = s;
-        releaseCoef = r <= 0.0005f ? 0.0f : (float) std::exp (-6.9 / (r * sr));
+        releaseInc = r <= 0.0005f ? 1.0 : 1.0 / (r * sr);
+        attack.setCurve (aCurve);
+        decay.setCurve (dCurve);
+        release.setCurve (rCurve);
     }
 };
 
@@ -35,11 +64,16 @@ public:
     {
         counter = 0;
         stage = c.delaySamples > 0 ? Delay : Attack;
+        if (stage == Attack) beginAttack (c);
     }
 
     void noteOff() noexcept
     {
-        if (stage != Idle) stage = Release;
+        if (stage == Idle) return;
+        stage = Release;
+        from = level;
+        phase = 0.0;
+        expState = 1.0;
     }
 
     void reset() noexcept { stage = Idle; level = 0.0f; }
@@ -53,35 +87,65 @@ public:
         {
             case Idle: break;
             case Delay:
-                if (++counter >= c.delaySamples) { stage = Attack; counter = 0; }
+                if (++counter >= c.delaySamples) { stage = Attack; counter = 0; beginAttack (c); }
                 break;
             case Attack:
-                level += c.attackInc;
-                if (level >= 1.0f) { level = 1.0f; stage = c.holdSamples > 0 ? Hold : Decay; counter = 0; }
+                if (attackInc <= 0.0 || (phase += attackInc) >= 1.0)
+                {
+                    level = 1.0f;
+                    stage = c.holdSamples > 0 ? Hold : Decay;
+                    counter = 0;
+                    if (stage == Decay) beginFall();
+                }
+                else
+                    level = (float) (from + (1.0 - from) * step (c.attack, attackInc));
                 break;
             case Hold:
-                if (++counter >= c.holdSamples) stage = Decay;
+                if (++counter >= c.holdSamples) { stage = Decay; beginFall(); }
                 break;
             case Decay:
-                level = c.sustain + (level - c.sustain) * c.decayCoef;
-                if (std::abs (level - c.sustain) < 1.0e-4f) { level = c.sustain; stage = Sustain; }
+                if ((phase += c.decayInc) >= 1.0) { level = c.sustain; stage = Sustain; }
+                else level = (float) (1.0 - (1.0 - c.sustain) * step (c.decay, c.decayInc));
                 break;
             case Sustain:
                 // sustain может меняться ручкой — плавно идём к нему
                 level += (c.sustain - level) * 0.002f;
                 break;
             case Release:
-                level *= c.releaseCoef;
-                if (level < 1.0e-5f) { level = 0.0f; stage = Idle; }
+                if ((phase += c.releaseInc) >= 1.0) { level = 0.0f; stage = Idle; }
+                else level = (float) (from * (1.0 - step (c.release, c.releaseInc)));
                 break;
         }
         return level;
     }
 
 private:
+    void beginAttack (const EnvCoefs& c) noexcept
+    {
+        // атака стартует с текущего уровня (повторное нажатие) и сохраняет скорость подъёма
+        from = level;
+        phase = 0.0;
+        expState = 1.0;
+        const double remaining = c.attackSamples * (1.0 - (double) from);
+        attackInc = remaining < 1.0 ? 0.0 : 1.0 / remaining;
+    }
+
+    void beginFall() noexcept { phase = 0.0; expState = 1.0; }
+
+    // значение формы после продвижения фазы на inc: e^(−k·p) ведём умножением (double — без накопления ошибки)
+    inline double step (const EnvSegment& seg, double inc) noexcept
+    {
+        if (seg.linear) return phase;
+        if (seg.k != lastK || inc != lastInc) { lastK = seg.k; lastInc = inc; mul = std::exp (-seg.k * inc); expState = std::exp (-seg.k * phase); }
+        else expState *= mul;
+        return (1.0 - expState) * seg.norm;
+    }
+
     Stage stage = Idle;
     float level = 0.0f;
     int counter = 0;
+    double from = 0.0, phase = 0.0, attackInc = 0.0, expState = 1.0;
+    double lastK = 1.0e9, lastInc = -1.0, mul = 1.0;
 };
 
 // ---------------------------------------------------------------------------

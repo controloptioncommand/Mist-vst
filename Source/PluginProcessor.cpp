@@ -29,6 +29,8 @@ MistProcessor::MistProcessor()
         o.delay = P (opId (i, "delay"));     o.attack = P (opId (i, "attack"));
         o.hold = P (opId (i, "hold"));       o.decay = P (opId (i, "decay"));
         o.sustain = P (opId (i, "sustain")); o.release = P (opId (i, "release"));
+        o.aCurve = P (opId (i, "aCurve"));   o.dCurve = P (opId (i, "dCurve"));
+        o.rCurve = P (opId (i, "rCurve"));
         o.start = P (opId (i, "start"));     o.loopStart = P (opId (i, "loopStart"));
         o.loopEnd = P (opId (i, "loopEnd")); o.xfade = P (opId (i, "xfade"));
         o.loopMode = P (opId (i, "loopMode")); o.reverse = P (opId (i, "reverse"));
@@ -46,6 +48,8 @@ MistProcessor::MistProcessor()
     pFilterOn = P ("filterOn"); pFilterType = P ("filterType"); pCutoff = P ("cutoff"); pReso = P ("reso");
     pFilterEnv = P ("filterEnv"); pFilterKey = P ("filterKey"); pDrive = P ("drive");
     pMA = P ("menv_attack"); pMD = P ("menv_decay"); pMS = P ("menv_sustain"); pMR = P ("menv_release");
+    pMAc = P ("menv_aCurve"); pMDc = P ("menv_dCurve"); pMRc = P ("menv_rCurve");
+    pTranspose = P ("transpose"); pHold = P ("hold");
     for (int l = 0; l < 2; ++l)
     {
         pLfo[l][0] = P (lfoId (l, "shape")); pLfo[l][1] = P (lfoId (l, "rate"));
@@ -109,7 +113,8 @@ void MistProcessor::buildSnapshot()
         o.feedback = f (p.feedback);
         o.scan = f (p.scan);
         o.pan = f (p.pan);
-        o.env.set (sr, f (p.delay), f (p.attack), f (p.hold), f (p.decay), f (p.sustain), f (p.release));
+        o.env.set (sr, f (p.delay), f (p.attack), f (p.hold), f (p.decay), f (p.sustain), f (p.release),
+                   f (p.aCurve), f (p.dCurve), f (p.rCurve));
         o.start = f (p.start);
         o.loopStart = f (p.loopStart);
         o.loopEnd = juce::jmax (o.loopStart, f (p.loopEnd));
@@ -165,6 +170,8 @@ void MistProcessor::buildSnapshot()
     snap.uniDetune = f (pUniDetune);
     snap.uniSpread = f (pUniSpread);
     snap.drone = b (pDrone);
+    snap.hold = ! snap.drone && b (pHold);   // кнопки взаимоисключающие; если хост включил обе — главнее Drone
+    snap.transpose = (float) iv (pTranspose);
     snap.hermite = iv (pInterp) == InterpHermite;
 
     snap.filterOn = b (pFilterOn);
@@ -174,7 +181,7 @@ void MistProcessor::buildSnapshot()
     snap.filterEnv = f (pFilterEnv);
     snap.filterKey = f (pFilterKey);
     snap.drive = f (pDrive);
-    snap.modEnv.set (sr, 0.0f, f (pMA), 0.0f, f (pMD), f (pMS), f (pMR));
+    snap.modEnv.set (sr, 0.0f, f (pMA), 0.0f, f (pMD), f (pMS), f (pMR), f (pMAc), f (pMDc), f (pMRc));
 
     snap.anyModulation = false;
     for (int s = 0; s < kNumModSlots; ++s)
@@ -253,6 +260,8 @@ void MistProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
         synth.render (upBuf, scaledMidi, snap, blockInfo);
         os.processSamplesDown (block);
     }
+
+    renderJumpSound (buffer);
 
     // защитный мягкий лимитер: прозрачен до -2 dBFS, выше — плавно ограничивает до 0 dBFS
     float peak = 0.0f;
@@ -361,6 +370,36 @@ void MistProcessor::clearSample (int op)
 }
 
 // ---------------------------------------------------------------------------
+void MistProcessor::renderJumpSound (juce::AudioBuffer<float>& buffer)
+{
+    if (jumpSoundPending.exchange (false))
+    {
+        jumpLength = jumpSamplesLeft = (int) (0.12 * hostSampleRate);
+        jumpPhase = 0.0;
+    }
+    if (jumpSamplesLeft <= 0) return;
+
+    const int n = juce::jmin (buffer.getNumSamples(), jumpSamplesLeft);
+    const int chans = juce::jmin (2, buffer.getNumChannels());
+    for (int i = 0; i < n; ++i)
+    {
+        const double t = (double) (jumpLength - jumpSamplesLeft) / (double) jumpLength;   // 0…1
+        const double hz = 330.0 * std::pow (2.0, 1.4 * t);                                 // 330 → ~870 Гц
+        const double dt = hz / hostSampleRate;
+        // пила с PolyBLEP — без грязного алиасинга
+        double v = 2.0 * jumpPhase - 1.0;
+        if (jumpPhase < dt)            { const double x = jumpPhase / dt; v -= x + x - x * x - 1.0; }
+        else if (jumpPhase > 1.0 - dt) { const double x = (jumpPhase - 1.0) / dt; v -= x * x + x + x + 1.0; }
+        jumpPhase += dt;
+        if (jumpPhase >= 1.0) jumpPhase -= 1.0;
+        const double env = juce::jmin (1.0, t * 60.0) * std::pow (1.0 - t, 2.0);   // 2 мс атака, плавный спад
+        const float s = (float) (v * env * 0.12);
+        for (int c = 0; c < chans; ++c) buffer.getWritePointer (c)[i] += s;
+        --jumpSamplesLeft;
+    }
+}
+
+// ---------------------------------------------------------------------------
 std::unique_ptr<juce::XmlElement> MistProcessor::createStateXml (bool includeSamples)
 {
     auto state = apvts.copyState();
@@ -401,6 +440,22 @@ void MistProcessor::restoreStateXml (const juce::XmlElement& xml)
         copy->removeChildElement (s, true);
     }
 
+    // Состояние из старой версии не знает про новые параметры (изгибы, Transpose, Hold).
+    // Без этого JUCE оставил бы им текущие значения от предыдущего звука — ставим значения по умолчанию.
+    for (auto* prm : getParameters())
+        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (prm))
+        {
+            bool found = false;
+            for (auto* c : copy->getChildIterator())
+                if (c->getStringAttribute ("id") == rp->getParameterID()) { found = true; break; }
+            if (! found)
+            {
+                auto* c = copy->createNewChildElement ("PARAM");
+                c->setAttribute ("id", rp->getParameterID());
+                c->setAttribute ("value", rp->convertFrom0to1 (rp->getDefaultValue()));
+            }
+        }
+
     apvts.replaceState (juce::ValueTree::fromXml (*copy));
     for (int i = 0; i < kNumOps; ++i)
         setSample (i, loaded[(size_t) i]);
@@ -412,7 +467,44 @@ void MistProcessor::resetToDefaults()
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
             rp->setValueNotifyingHost (rp->getDefaultValue());
     for (int i = 0; i < kNumOps; ++i)
+    {
         setSample (i, nullptr);
+        setOpName (i, {});
+    }
+}
+
+void MistProcessor::resetForTemplate()
+{
+    // настройки, которые принадлежат загруженному семплу, а не шаблону
+    static const char* sampleOwned[] = { "start", "loopStart", "loopEnd", "xfade", "loopMode", "reverse", "root", "keytrack" };
+    juce::StringArray keep { "transpose" };
+    for (int i = 0; i < kNumOps; ++i)
+        for (auto* n : sampleOwned) keep.add (opId (i, n));
+
+    for (auto* p : getParameters())
+        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
+            if (! keep.contains (rp->getParameterID()))
+                rp->setValueNotifyingHost (rp->getDefaultValue());
+}
+
+static juce::Identifier opNameKey (int op) { return juce::Identifier ("opName" + juce::String (op + 1)); }
+
+juce::String MistProcessor::getCustomOpName (int op) const
+{
+    return apvts.state.getProperty (opNameKey (op)).toString();
+}
+
+juce::String MistProcessor::getOpName (int op) const
+{
+    const auto custom = getCustomOpName (op);
+    return custom.isNotEmpty() ? custom : "Op " + juce::String (op + 1);
+}
+
+void MistProcessor::setOpName (int op, const juce::String& name)
+{
+    const auto clean = name.removeCharacters ("\r\n\t").trim().substring (0, kMaxOpNameLength);
+    if (clean.isEmpty()) apvts.state.removeProperty (opNameKey (op), nullptr);
+    else apvts.state.setProperty (opNameKey (op), clean, nullptr);
 }
 
 void MistProcessor::getStateInformation (juce::MemoryBlock& destData)

@@ -77,6 +77,6 @@ private:
     void updateLut();
     void drawSpectrumColumn (int x, const std::vector<juce::uint8>& col);
 
-    juce::Rectangle<float> tabsArea, legendArea, previewChip;
+    juce::Rectangle<float> tabsArea, legendArea;
 };
 } // namespace mist

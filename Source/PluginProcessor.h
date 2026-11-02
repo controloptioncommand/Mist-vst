@@ -43,7 +43,15 @@ public:
     // ---- состояние целиком (параметры + семплы) — используется и пресетами
     std::unique_ptr<juce::XmlElement> createStateXml (bool includeSamples = true);
     void restoreStateXml (const juce::XmlElement& xml);
-    void resetToDefaults();
+    void resetToDefaults();          // всё по умолчанию: параметры, семплы, имена слотов (Init patch)
+    void resetForTemplate();         // для шаблонов: параметры по умолчанию, но семплы, их настройки,
+                                     // имена слотов и Transpose остаются как есть
+
+    // ---- имена слотов (двойной клик по «Op N»). Пустое имя = «Op N». Хранятся в состоянии и пресетах.
+    static constexpr int kMaxOpNameLength = 16;
+    juce::String getOpName (int op) const;          // то, что показывать: своё имя или «Op N»
+    juce::String getCustomOpName (int op) const;    // только своё имя (может быть пустым)
+    void setOpName (int op, const juce::String& name);
 
     // ---- семплы
     void loadSampleAsync (int op, const juce::File& file);
@@ -53,6 +61,7 @@ public:
     juce::String getLastError() const;
 
     // ---- для UI
+    void playJumpSound() { jumpSoundPending.store (true); }
     juce::AudioProcessorValueTreeState apvts;
     PresetManager presets;
     static constexpr int kScopeSize = 16384;
@@ -67,6 +76,12 @@ private:
     void setSample (int op, std::shared_ptr<const SampleAsset> asset);
     void collectGarbage();
     void buildSnapshot();
+    void renderJumpSound (juce::AudioBuffer<float>& buffer);
+
+    // короткий «прыжок»: пила со скольжением вверх, подмешивается к выходу
+    std::atomic<bool> jumpSoundPending { false };
+    int jumpSamplesLeft = 0, jumpLength = 0;
+    double jumpPhase = 0.0;
 
     Synth synth;
     Snapshot snap;
@@ -86,6 +101,7 @@ private:
     {
         std::atomic<float> *on, *mode, *coarse, *fine, *detune, *fixed, *fixedHz, *level, *velSens, *feedback,
                            *scan, *pan, *out, *delay, *attack, *hold, *decay, *sustain, *release,
+                           *aCurve, *dCurve, *rCurve,
                            *start, *loopStart, *loopEnd, *xfade, *loopMode, *reverse, *root, *keytrack,
                            *grainSize, *grainDensity, *grainSpray;
     };
@@ -93,7 +109,7 @@ private:
     std::atomic<float>* mat[kNumOps][kNumOps] {};
     std::atomic<float> *pAlgorithm, *pFm, *pMaster, *pPolyMode, *pGlide, *pBend, *pUniVoices, *pUniDetune, *pUniSpread,
                        *pFilterOn, *pFilterType, *pCutoff, *pReso, *pFilterEnv, *pFilterKey, *pDrive,
-                       *pMA, *pMD, *pMS, *pMR;
+                       *pMA, *pMD, *pMS, *pMR, *pMAc, *pMDc, *pMRc, *pTranspose, *pHold;
     std::atomic<float>* pLfo[2][4] {};
     std::atomic<float>* pSlot[kNumModSlots][3] {};
 

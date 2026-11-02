@@ -10,7 +10,7 @@ Visualizer::Visualizer()
 {
     for (int i = 0; i < kWaveLines; ++i) waveLines.push_back (std::vector<float> (kWavePoints, 0.0f));
     setWantsKeyboardFocus (true);
-    setTitle ("Result preview");
+    setTitle ("Output view");
     setDescription ("Live view of the synth output. Tabs: Waves, Spectrum, Scope. Use left and right arrow keys to switch.");
 }
 
@@ -23,7 +23,7 @@ juce::Colour Visualizer::background() const
 void Visualizer::setMode (Mode m)
 {
     mode = m;
-    setDescription (juce::String ("Result preview, ") + kTabNames[(int) m] + " view selected.");
+    setDescription (juce::String ("Output view, ") + kTabNames[(int) m] + " view selected.");
     repaint();
 }
 
@@ -43,7 +43,6 @@ void Visualizer::resized()
     const float h = 28.0f;
     const float tabW = 3 * 72.0f;
     tabsArea = { (float) getWidth() - 12.0f - tabW, (float) getHeight() - 12.0f - h, tabW, h };
-    previewChip = { 12.0f, (float) getHeight() - 12.0f - h, 116.0f, h };
     legendArea = { (float) getWidth() - 12.0f - 236.0f, 12.0f, 236.0f, h };
 }
 
@@ -344,12 +343,6 @@ void Visualizer::paintOverlay (juce::Graphics& g)
             g.fillRect (juce::Rectangle<float> (bar.getX() + seg * (float) b + 0.5f, bar.getY(), seg - 1.0f, bar.getHeight()));
         }
     }
-
-    // чип «Result preview»
-    LnF::drawPlate (g, previewChip, 8.0f, plateFill);
-    g.setFont (LnF::font (LnF::Type::subheadline));
-    g.setColour (Colours::ink);
-    g.drawText ("Result preview", previewChip, juce::Justification::centred);
 
     // стеклянные вкладки вида
     LnF::drawPlate (g, tabsArea, tabsArea.getHeight() * 0.5f, plateFill);   // сегменты — капсула

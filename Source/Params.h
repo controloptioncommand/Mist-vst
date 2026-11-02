@@ -10,6 +10,11 @@ constexpr int kNumModSlots   = 8;
 constexpr int kNumAlgorithms = 32;
 constexpr int kSubBlock      = 32;   // контрольная частота модуляции (сэмплов)
 
+// Изгиб отрезков огибающей по умолчанию: атака прямая, спад и релиз — экспонента как до v3
+constexpr float kDefaultAttackCurve = 0.0f;
+constexpr float kDefaultFallCurve   = 0.5f;
+constexpr float kCurveSteepness     = 13.8f;   // curve 0.5 → k = 6.9, та же экспонента, что раньше
+
 inline juce::String opId (int op, const char* name)   { return "op" + juce::String (op + 1) + "_" + name; }
 inline juce::String matId (int src, int dst)          { return "mat_" + juce::String (src + 1) + "_" + juce::String (dst + 1); }
 inline juce::String modId (int slot, const char* name){ return "mod" + juce::String (slot + 1) + "_" + name; }

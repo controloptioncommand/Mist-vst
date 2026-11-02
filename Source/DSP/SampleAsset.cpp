@@ -140,14 +140,27 @@ void SampleAsset::analyse()
         period = juce::jmax (8.0, (length - 4) / 2.0);
     periodSamples = period;
 
+    // Кадры берём только из слышимой части (выше −45 дБ от пика): тишина в начале и в хвосте
+    // давала бы немые кадры, и Scrub в этих позициях молчал.
+    int audibleStart = 0, audibleEnd = length;
+    {
+        float peak = 0.0f;
+        for (int i = 0; i < length; ++i) peak = juce::jmax (peak, std::abs (x[i]));
+        const float thr = peak * 0.0056f;
+        while (audibleStart < length && std::abs (x[audibleStart]) < thr) ++audibleStart;
+        while (audibleEnd > audibleStart && std::abs (x[audibleEnd - 1]) < thr) --audibleEnd;
+        // слышимая часть короче двух периодов — берём весь семпл, как раньше
+        if (audibleEnd - audibleStart < (int) (2 * period) + 4) { audibleStart = 0; audibleEnd = length; }
+    }
+
     // кадры: окно 2*period, бесшовная склейка y(t) = t*x(p+tP) + (1-t)*x(p+P+tP)
     const int maxFrames = 64;
-    const double usable = juce::jmax (0.0, (double) length - 2.0 * period - 2.0);
+    const double usable = juce::jmax (0.0, (double) (audibleEnd - audibleStart) - 2.0 * period - 2.0);
     int numFrames = (int) juce::jlimit (1.0, (double) maxFrames, usable / period + 1.0);
     std::vector<std::vector<float>> frames ((size_t) numFrames, std::vector<float> ((size_t) Wavetable::N));
     for (int f = 0; f < numFrames; ++f)
     {
-        const double pos = numFrames > 1 ? usable * f / (numFrames - 1) : 0.0;
+        const double pos = audibleStart + (numFrames > 1 ? usable * f / (numFrames - 1) : 0.0);
         auto& fr = frames[(size_t) f];
         for (int i = 0; i < Wavetable::N; ++i)
         {

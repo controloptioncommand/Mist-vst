@@ -84,7 +84,7 @@ td.r { font-family: "Medeo Mono"; font-size: 8.6pt; color: var(--ink2); white-sp
 <div class="cover">
   <div class="grid"></div>
   <div class="logo">Mist</div>
-  <div class="sub">Руководство пользователя · <b>v2.1</b></div>
+  <div class="sub">Руководство пользователя · <b>v3</b></div>
   <div class="shot"><img src="img/main.jpg"></div>
   <div class="foot"><span>sample-based FM synth · VST3 · AU · macOS</span><span>made by nnn</span></div>
 </div>
@@ -105,9 +105,9 @@ td.r { font-family: "Medeo Mono"; font-size: 8.6pt; color: var(--ink2); white-sp
     <li><span class="mono">11</span>Filter и Mod Env</li>
     <li><span class="mono">12</span>LFO</li>
     <li><span class="mono">13</span>Mod Matrix</li>
-    <li><span class="mono">14</span>Подвал: Drone, качество, кубик</li>
+    <li><span class="mono">14</span>Подвал: Drone, Hold, качество, кубик</li>
     <li><span class="mono">15</span>Главный вид</li>
-    <li><span class="mono">16</span>Пресеты и настройки</li>
+    <li><span class="mono">16</span>Шаблоны, пресеты и настройки</li>
     <li><span class="mono">17</span>Рецепты</li>
     <li><span class="mono">18</span>Вопросы и ответы</li>
   </ul>
@@ -120,7 +120,8 @@ td.r { font-family: "Medeo Mono"; font-size: 8.6pt; color: var(--ink2); white-sp
     <li>32 готовых алгоритма соединения и свободная матрица 6×6, feedback на каждом операторе.</li>
     <li>8 голосов, unison до 8, glide, режимы Mono и Legato.</li>
     <li>Фильтр с отдельной огибающей, 2 LFO с синхронизацией, Mod Matrix на 8 слотов.</li>
-    <li>Drone: ноты держатся после отпускания клавиш.</li>
+    <li>Drone и Hold: ноты держатся после отпускания клавиш.</li>
+    <li>100 шаблонов с разными характерами: кладёте свой семпл в Op 1, остальное уже настроено.</li>
     <li>Семплы сохраняются внутри пресета и проекта Ableton.</li>
     <li>Кубик: случайный патч в безопасных пределах.</li>
   </ul>
@@ -146,6 +147,7 @@ td.r { font-family: "Medeo Mono"; font-size: 8.6pt; color: var(--ink2); white-sp
   <ol class="steps">
     <li>Положите Mist на MIDI-дорожку и сыграйте ноту. Звучит встроенная волна.</li>
     <li>Перетащите аудиофайл из Finder или из браузера Ableton на карточку <b>Op 1</b>.</li>
+    <li>Самый быстрый путь — клик по имени пресета → <b>Templates</b> → выберите характер и шаблон. Семпл остаётся на месте, меняется обвязка вокруг него.</li>
     <li>В тулбаре выберите режим: <b>Scrub</b> для чистого тона, <b>Sample PM</b> для живой текстуры, <b>Grain</b> для облака.</li>
     <li>Положите другой семпл на <b>Op 2</b>. На вкладке <b>Operator</b> поднимите ему <b>Depth</b>: это глубина, с которой он модулирует Op 1.</li>
     <li>Вкладка <b>Routing</b>: попробуйте другой алгоритм, например <i>24 Ring 6</i>.</li>
@@ -159,16 +161,17 @@ td.r { font-family: "Medeo Mono"; font-size: 8.6pt; color: var(--ink2); white-sp
   <figure class="small"><img src="img/main.jpg"><figcaption>Главное окно в тёмной теме Rubber.</figcaption></figure>
   <table>
     <tr><th style="width:34mm">Зона</th><th>Что там</th></tr>
-    <tr><td>Тулбар</td><td>Логотип Mist (клик — страница About), пресет <span class="mono">‹ имя ›</span>, режим выбранного оператора, индикатор Out, кнопка настроек.</td></tr>
+    <tr><td>Тулбар</td><td>Логотип Mist (клик — страница About), пресет <span class="mono">‹ имя ›</span>, режим выбранного оператора, ручка Pitch, индикатор Out, кнопка настроек.</td></tr>
     <tr><td>Главный вид</td><td>То, что звучит на выходе: Scope, Waves или Spectrum. Переключатель снизу справа.</td></tr>
     <tr><td>Колонка Op 1–6</td><td>Карточки операторов с семплами. Клик выбирает оператор, панель справа показывает его настройки.</td></tr>
     <tr><td>Панель</td><td>Вкладки Operator, Envelope, Routing, Voice, Filter, LFO, Mod Matrix.</td></tr>
-    <tr><td>Подвал</td><td>Drone, Interpolation, Oversampling, кубик, счётчики Voices и CPU.</td></tr>
+    <tr><td>Подвал</td><td>Drone, Hold, Interpolation, Oversampling, кубик, счётчики Voices и CPU.</td></tr>
   </table>
   <h3>Тулбар</h3>
   <ul>
     <li><b>‹ ›</b> — предыдущий и следующий пресет. Клик по имени открывает список пресетов по категориям.</li>
     <li><b>Sample PM / Scrub / Grain</b> — режим оператора, выбранного в колонке слева.</li>
+    <li><b>Pitch</b> — транспонирование всего звука на <span class="mono">±24</span> полутона: ноты, операторы с Fixed freq и семплы сдвигаются вместе. Двойной клик — 0. Сохраняется в пресете; кубик и шаблоны его не трогают.</li>
     <li><b>Out</b> — пиковый уровень выхода в dB. Полоса зелёная, выше −1 dB становится оранжевой.</li>
     <li><b>Настройки</b> (иконка с ползунками) — сохранение пресета, Init, тема, размер окна, About. См. раздел 16.</li>
   </ul>
@@ -190,6 +193,7 @@ td.r { font-family: "Medeo Mono"; font-size: 8.6pt; color: var(--ink2); white-sp
         <li><b>Start · Length</b> — точка старта и длина семпла в секундах.</li>
         <li><b>Reverse</b> — проигрывать семпл задом наперёд.</li>
         <li>Пустая карточка компактная: режим, «built-in» и множитель частоты, например <span class="mono">×2.00</span>.</li>
+        <li><b>Имя слота</b>: двойной клик по «Op 5» (или F2, или правый клик → <b>Rename…</b>) — поле ввода. Enter сохраняет, Esc отменяет, пустое имя возвращает «Op 5». Имя видно на карточке, в заголовке панели и в списке назначений Mod Matrix, хранится в пресете и проекте.</li>
       </ul>
       <p>Выбранная карточка обведена рамкой.</p>
     </div>
@@ -198,7 +202,7 @@ td.r { font-family: "Medeo Mono"; font-size: 8.6pt; color: var(--ink2); white-sp
   <ul>
     <li>Перетащить файл на карточку (из Finder или браузера Ableton). Пока файл над карточкой, она подписана «Release to load».</li>
     <li>Двойной клик по волне на карточке — окно выбора файла.</li>
-    <li>Правый клик по карточке — меню: <b>Load sample…</b>, <b>Clear sample</b> и выбор режима.</li>
+    <li>Правый клик по карточке — меню: <b>Load sample…</b>, <b>Clear sample</b>, <b>Rename…</b> и выбор режима.</li>
     <li>С клавиатуры: выбрать пустую карточку и нажать Enter.</li>
   </ul>
   <p>Подходят WAV, AIFF, FLAC, MP3 и другие форматы, которые понимает macOS. Высота тона семпла определяется автоматически и записывается в <b>Root</b>.</p>
@@ -213,7 +217,7 @@ td.r { font-family: "Medeo Mono"; font-size: 8.6pt; color: var(--ink2); white-sp
   <table>
     <tr><th style="width:24mm">Режим</th><th>Как звучит</th><th style="width:44mm">Ручки режима</th></tr>
     <tr><td>Sample PM</td><td>Семпл играет как есть, а модуляторы сдвигают точку чтения в нём, сэмпл за сэмплом. Живые, «грязные», шевелящиеся текстуры. Высота следует за клавишами относительно Root.</td><td>Start, Loop Start, Loop End, XFade, Root, режим петли, Keytrack</td></tr>
-    <tr><td>Scrub</td><td>Из семпла нарезается wavetable на 64 кадра по найденной высоте тона. Чистый тон без алиасинга. Хорош для пэдов и чистого FM.</td><td>Position</td></tr>
+    <tr><td>Scrub</td><td>Из семпла нарезается wavetable на 64 кадра по найденной высоте тона. Кадры берутся только из слышимой части: тишина в начале и в конце пропускается. Чистый тон без алиасинга. Хорош для пэдов и чистого FM.</td><td>Position</td></tr>
     <tr><td>Grain</td><td>Перекрывающиеся зёрна из выбранного места семпла. Модуляторы гнут каждое зерно. Облака, шумные дроны, размытые пэды.</td><td>Position, Size, Density, Spray, Root, Keytrack</td></tr>
   </table>
   <div class="note"><b>Какой выбрать.</b> Нужен тон, который можно играть мелодией, — Scrub. Нужен характер самой записи — Sample PM. Нужна размытая атмосфера — Grain. Разные операторы могут быть в разных режимах.</div>
@@ -264,12 +268,15 @@ td.r { font-family: "Medeo Mono"; font-size: 8.6pt; color: var(--ink2); white-sp
   <table>
     <tr><th style="width:26mm">Стадия</th><th>Что делает</th><th style="width:30mm">Диапазон</th></tr>
     <tr><td>Delay</td><td>Пауза перед началом атаки.</td><td class="r">0–20 s</td></tr>
-    <tr><td>Attack</td><td>Нарастание до максимума (линейное).</td><td class="r">0–30 s</td></tr>
+    <tr><td>Attack</td><td>Нарастание до максимума.</td><td class="r">0–30 s</td></tr>
     <tr><td>Hold</td><td>Сколько держится максимум.</td><td class="r">0–20 s</td></tr>
     <tr><td>Decay</td><td>Спад до уровня Sustain.</td><td class="r">0–30 s</td></tr>
     <tr><td>Sustain</td><td>Уровень, пока клавиша нажата.</td><td class="r">0–100%</td></tr>
     <tr><td>Release</td><td>Затухание после отпускания.</td><td class="r">0–30 s</td></tr>
   </table>
+  <h3>Изгиб: точки на графике</h3>
+  <p>На середине атаки, спада и релиза есть точка. Потяните её вверх или вниз — отрезок выгнется: быстрый старт и плавный подход к цели или, наоборот, медленный старт и резкий конец. Посередине — прямая. Двойной клик по точке возвращает форму по умолчанию: атака прямая, спад и релиз — плавная экспонента, как до v3. Shift при перетаскивании — точнее. С клавиатуры: Tab на график, ← → выбирают отрезок, ↑ ↓ гнут его.</p>
+  <p>Изгиб есть у всех шести операторов и у Mod Env (на вкладке Filter, мини-график справа от ручек).</p>
   <div class="note"><b>Для дронов.</b> Attack в несколько секунд у модуляторов и разная длина атак у разных операторов дают звук, который медленно раскрывается и меняет тембр сам по себе.</div>
 </section>
 
@@ -362,7 +369,7 @@ td.r { font-family: "Medeo Mono"; font-size: 8.6pt; color: var(--ink2); white-sp
     <tr><td>Drive</td><td>Перегруз на входе фильтра, добавляет плотности.</td><td class="r">0–100%</td></tr>
   </table>
   <h3>Mod Env</h3>
-  <p>Отдельная огибающая ADSR (<b>Attack, Decay, Sustain, Release</b>, времена до 30 s). Она двигает фильтр через Env Amt и доступна как источник в Mod Matrix. Например: Mod Env → FM Amount даёт яркий удар в начале каждой ноты.</p>
+  <p>Отдельная огибающая ADSR (<b>Attack, Decay, Sustain, Release</b>, времена до 30 s) с теми же точками изгиба на мини-графике. Она двигает фильтр через Env Amt и доступна как источник в Mod Matrix. Например: Mod Env → FM Amount даёт яркий удар в начале каждой ноты.</p>
 </section>
 
 <section>
@@ -392,11 +399,14 @@ td.r { font-family: "Medeo Mono"; font-size: 8.6pt; color: var(--ink2); white-sp
 </section>
 
 <section>
-  <h2><span class="n">14</span>Подвал: Drone, качество, кубик</h2>
+  <h2><span class="n">14</span>Подвал: Drone, Hold, качество, кубик</h2>
   <figure><img src="img/footer.jpg"></figure>
   <h3>Drone</h3>
   <p>Пока Drone включён, ноты не отпускаются: можно убрать руки с клавиатуры и крутить ручки. Новые ноты добавляются к звучащим. Если нот больше 8, самая старая уступает место. При выключении Drone все ноты, клавиши которых не нажаты, уходят в Release.</p>
-  <div class="note"><b>Drone и Arpeggiator.</b> Drone держит сам звук, поэтому с арпеджиатором Ableton перед Mist каждая нота арпа зависнет, и получится каша. Для арпеджио выключите Drone в Mist и включите <b>Hold</b> в Arpeggiator: он держит аккорд на уровне MIDI, а арп продолжает его перебирать.</div>
+  <h3>Hold</h3>
+  <p>Как Hold в Arpeggiator Ableton: ноты звучат после отпускания, но <b>каждое новое нажатие заменяет</b> удерживаемые. Клавиши, нажатые вместе, держатся целиком как один аккорд; следующий аккорд заменяет предыдущий. При выключении Hold все ноты, клавиши которых не нажаты, уходят в Release.</p>
+  <p>Drone и Hold — две отдельные кнопки, включение одной выключает другую.</p>
+  <div class="note"><b>Drone, Hold и Arpeggiator.</b> Drone и Hold держат сам звук, поэтому с арпеджиатором Ableton перед Mist получится каша. Для арпеджио выключите их в Mist и включите <b>Hold</b> в самом Arpeggiator: он держит аккорд на уровне MIDI, а арп продолжает его перебирать.</div>
   <h3>Interpolation</h3>
   <p>Как читаются семплы между точками. <b>Hermite</b> (по умолчанию) — чище и мягче. <b>Linear</b> — чуть легче для процессора и чуть «грязнее» на высоких нотах.</p>
   <h3>Oversampling</h3>
@@ -410,7 +420,24 @@ td.r { font-family: "Medeo Mono"; font-size: 8.6pt; color: var(--ink2); white-sp
     <li>фильтр: срез не ниже 900 Hz, резонанс не выше 50%;</li>
     <li>LFO.</li>
   </ul>
-  <p>Не трогает Master, семплы и их настройки (start, петли, reverse, root), режимы операторов, Drone, Oversampling, Interpolation, настройки голосов и Mod Matrix. Несущие получают громкость не ниже 65%, модуляторы — 15–60%, поэтому тишины или перегруза не будет. Понравившийся результат сохраните как пресет: кубик называет патч «Random».</p>
+  <p>Никогда не трогает Master, Pitch, семплы и их настройки (start, петли, reverse, root), Drone и Hold, Oversampling, Interpolation, настройки голосов, Mod Matrix и имена слотов. Несущие получают громкость не ниже 65%, модуляторы — 15–60%, поэтому тишины или перегруза не будет. Понравившийся результат сохраните как пресет: кубик называет патч «Random».</p>
+  <h3 style="break-before: page">Что кубику можно менять</h3>
+  <p>Настройки → <b>Randomizer</b>: галочка — группу кубик меняет, без галочки — защищена. Выбор запоминается для всех проектов.</p>
+  <table>
+    <tr><th style="width:52mm">Группа</th><th>Что в ней</th><th style="width:22mm">По умолчанию</th></tr>
+    <tr><td>Algorithm</td><td>Алгоритм</td><td>меняет</td></tr>
+    <tr><td>Levels &amp; FM Amount</td><td>Depth операторов и общая глубина FM</td><td>меняет</td></tr>
+    <tr><td>Pitch (Coarse, Fine, Detune)</td><td>Отношения частот и расстройка</td><td>меняет</td></tr>
+    <tr><td>Feedback</td><td>Обратная связь операторов</td><td>меняет</td></tr>
+    <tr><td>Wave Scan</td><td>Position</td><td>меняет</td></tr>
+    <tr><td>Envelopes</td><td>Огибающие операторов и Mod Env, изгибы</td><td>меняет</td></tr>
+    <tr><td>Filter</td><td>Cutoff, Reso, Env Amt, Drive</td><td>меняет</td></tr>
+    <tr><td>Unison Detune</td><td>Расстройка unison</td><td>меняет</td></tr>
+    <tr><td>LFO</td><td>Форма и скорость LFO</td><td>меняет</td></tr>
+    <tr><td>Grain</td><td>Size, Density, Spray</td><td>меняет</td></tr>
+    <tr><td>Pan &amp; Stereo Spread</td><td>Pan операторов и Spread unison</td><td>защищена</td></tr>
+    <tr><td>Operator modes</td><td>Режим Scrub / Sample PM / Grain — только у операторов с семплом</td><td>защищена</td></tr>
+  </table>
   <h3>Voices и CPU</h3>
   <p>Сколько голосов звучит сейчас из 8 и сколько времени процессора берёт Mist. Если CPU подбирается к 100%, уменьшите Unison или Oversampling.</p>
   <div class="note"><b>Защита выхода.</b> На выходе всегда стоит мягкий лимитер: до −2 dBFS он прозрачен, выше плавно прижимает сигнал, и выход не поднимается выше 0 dBFS.</div>
@@ -425,24 +452,42 @@ td.r { font-family: "Medeo Mono"; font-size: 8.6pt; color: var(--ink2); white-sp
 </section>
 
 <section>
-  <h2><span class="n">16</span>Пресеты и настройки</h2>
+  <h2><span class="n">16</span>Шаблоны, пресеты и настройки</h2>
+  <h3>Шаблоны</h3>
+  <p>Фактори-пресеты в Mist — это 100 <b>шаблонов</b>, «формочки» для ваших семплов. Положите семпл в <b>Op 1</b> и листайте шаблоны: семпл остаётся, а вокруг него меняется обвязка — модуляторы, огибающие, фильтр, unison, LFO. Без семпла каждый шаблон звучит сам по себе на встроенной волне.</p>
+  <p>Клик по имени пресета → <b>Templates</b> → характер. Характер — первое слово в названии:</p>
+  <table>
+    <tr><th style="width:24mm">Характер</th><th>Как звучит</th></tr>
+    <tr><td>Airy</td><td>Воздушные: медленная атака, слабая модуляция, широкий unison, «дыхание» сверху.</td></tr>
+    <tr><td>Soft</td><td>Мягкие: слабая модуляция, отношения 1:1 и 1:2, приглушённый фильтр.</td></tr>
+    <tr><td>Warm</td><td>Тёплые: средняя модуляция с feedback, как у аналоговой пилы, фильтр LP 24 и лёгкий Drive.</td></tr>
+    <tr><td>Hollow</td><td>Полые: отношения 1:2 и 1:4 — нечётные гармоники, как у кларнета; полосовой фильтр.</td></tr>
+    <tr><td>Glassy</td><td>Стеклянные: высокие модуляторы (×7, ×11, ×14) с быстрым спадом — «зубец», как у электропиано.</td></tr>
+    <tr><td>Bright</td><td>Яркие: сильная модуляция без фильтра, быстрая атака.</td></tr>
+    <tr><td>Hard</td><td>Жёсткие: сильная модуляция, feedback и Drive, яркость следует за огибающей.</td></tr>
+    <tr><td>Metallic</td><td>Металлические: дробные отношения и фиксированные частоты, долгий спад — колокола, гонги, пластины.</td></tr>
+    <tr><td>Dark</td><td>Тёмные: низкий срез, суб-оператор на октаву ниже, слабая модуляция.</td></tr>
+    <tr><td>Moving</td><td>Движущиеся: LFO двигают Position, глубину FM, срез и панораму.</td></tr>
+  </table>
+  <p>Шаблон <b>не трогает</b> семплы, их Start, петли, Reverse, Root и Keytrack, имена слотов и Pitch. Init patch, наоборот, сбрасывает всё, включая семплы и имена.</p>
   <h3>Пресеты</h3>
   <ul>
-    <li>Клик по имени пресета в тулбаре — список по категориям: Factory и ваши. Стрелки ‹ › листают по порядку.</li>
+    <li>Клик по имени пресета в тулбаре — меню: Templates и ваши папки. Стрелки ‹ › листают по порядку.</li>
     <li>Сохранить: настройки → <b>Save preset…</b>, ввести имя и категорию.</li>
     <li>Файлы лежат в <code>~/Music/Mist/Presets</code> с расширением <code>.mist</code>. Семплы внутри файла, поэтому пресет можно просто переслать.</li>
-    <li>Factory: Init FM, Glass Pad, Dark Ring Drone, Metal Bell, Breathing Swarm, Formant Choir, Chaos Engine, Hollow Sub.</li>
+    <li>Прежние фактори-пресеты стали шаблонами: Glass Pad → Glassy Pad, Dark Ring Drone → Dark Ring, Metal Bell → Metallic Bell, Breathing Swarm → Airy Swarm, Formant Choir → Airy Choir, Chaos Engine → Hard Chaos, Hollow Sub — без изменений. Init FM — это Init patch.</li>
   </ul>
   <p>Проект Ableton хранит состояние Mist целиком, вместе с семплами, даже без сохранения пресета.</p>
   <h3>Меню настроек</h3>
   <table>
     <tr><th style="width:42mm">Пункт</th><th>Что делает</th></tr>
     <tr><td>Save preset…</td><td>Сохранить текущий звук как пресет.</td></tr>
-    <tr><td>Init patch</td><td>Сбросить всё в исходное состояние: один оператор, чистый тон.</td></tr>
+    <tr><td>Init patch</td><td>Сбросить всё в исходное состояние: один оператор, чистый тон. Семплы и имена слотов тоже удаляются.</td></tr>
     <tr><td>Open presets folder</td><td>Открыть папку пресетов в Finder.</td></tr>
-    <tr><td>Delete current preset</td><td>Удалить текущий пользовательский пресет. Factory удалить нельзя.</td></tr>
+    <tr><td>Delete current preset</td><td>Удалить текущий пользовательский пресет. Шаблоны удалить нельзя.</td></tr>
     <tr><td>Appearance</td><td><b>Match system</b> — тема как в macOS. <b>Oxygen</b> — светлая. <b>Rubber</b> — тёмная. Выбор запоминается.</td></tr>
     <tr><td>Window size</td><td>75, 100, 125 или 150%.</td></tr>
+    <tr><td>Randomizer</td><td>Какие группы параметров кубику можно менять. См. раздел 14.</td></tr>
     <tr><td>About Mist</td><td>Страница About (то же, что клик по логотипу).</td></tr>
   </table>
   <figure class="small"><img src="img/ui_oxygen_scope.jpg"><figcaption>Светлая тема Oxygen.</figcaption></figure>
@@ -502,7 +547,7 @@ td.r { font-family: "Medeo Mono"; font-size: 8.6pt; color: var(--ink2); white-sp
     <tr><td>Откроются ли старые проекты после обновления?</td><td>Да, состояние сохраняется между версиями. Если диапазон какого-то параметра меняется, это будет сказано в патчноуте.</td></tr>
     <tr><td>Где история изменений</td><td>На странице релизов GitHub, у каждой версии свой патчноут.</td></tr>
   </table>
-  <p style="margin-top:8mm; color: var(--ink2); font-size: 9pt;">Mist v2.1 · made by nnn · написан на C++ и JUCE 8. Шрифты Medeo — SIL Open Font License.<br>Исходники и релизы: <span class="mono">github.com/controloptioncommand/Mist-vst</span></p>
+  <p style="margin-top:8mm; color: var(--ink2); font-size: 9pt;">Mist v3 · made by nnn · написан на C++ и JUCE 8. Шрифты Medeo — SIL Open Font License.<br>Исходники и релизы: <span class="mono">github.com/controloptioncommand/Mist-vst</span></p>
 </section>
 
 </body>

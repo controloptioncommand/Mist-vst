@@ -62,6 +62,8 @@ struct Snapshot
     std::array<ModSlot, kNumModSlots> slots;
     bool anyModulation = false;
     bool drone = false;
+    bool hold = false;          // Hold: новое нажатие заменяет удерживаемые ноты
+    float transpose = 0.0f;     // полутоны, сдвигает весь синтез (и Fixed, и семплы)
     bool hermite = true;
 
     struct LfoSettings { int shape = 0; float rateHz = 1.0f; bool sync = false; int div = 3; } lfo[2];
@@ -200,6 +202,7 @@ private:
     std::vector<int> monoStack;
     int lastPolyMode = 0;
     bool keyDown[128] {};
-    bool lastDrone = false;
+    bool lastLatch = false;   // Drone или Hold были включены в прошлом блоке
+    void releaseUnheld (const Snapshot& s, bool respectPedal);
 };
 } // namespace mist

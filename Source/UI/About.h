@@ -6,10 +6,10 @@ namespace mist
 // Версия и дата — показываются на странице About
 namespace AboutInfo
 {
-    inline const char* version = "v2.1";
+    inline const char* version = "v3";
     inline const char* repoUrl = "https://github.com/controloptioncommand/Mist-vst";
     inline const char* authorUrl = "https://t.me/nothiingnothingnothing";
-    inline const char* date = "1st November 2026";
+    inline const char* date = "2nd November 2026";
     inline const char* author = "made by nnn";
 }
 
@@ -21,6 +21,7 @@ class GameView : public juce::Component, private juce::Timer
 {
 public:
     GameView();
+    std::function<void()> onJump;   // сова оттолкнулась от земли — звук прыжка
     void start();
     void stop();
     void paint (juce::Graphics& g) override;
@@ -103,6 +104,7 @@ public:
     void resized() override;
     void showGame (bool show);
     std::function<void()> onClose;
+    std::function<void()> onGameJump;
     FogLogo& getFogForTest() { return logoHit; }
     void focusBack() { back.grabKeyboardFocus(); }
     bool backHasFocus() const { return back.hasKeyboardFocus (false); }

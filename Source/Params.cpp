@@ -100,6 +100,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     auto pid = [] (const juce::String& id) { return juce::ParameterID { id, 1 }; };
+    auto pid3 = [] (const juce::String& id) { return juce::ParameterID { id, 3 }; };   // добавлены в v3
 
     // ---------------- Global
     auto global = std::make_unique<juce::AudioProcessorParameterGroup> ("global", "Global", "|");
@@ -115,6 +116,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                                              unitAttr ("ct", 1)));
     global->addChild (std::make_unique<APF> (pid ("uniSpread"), "Uni Spread", NR (0.0f, 1.0f), 0.7f, percentAttr()));
     global->addChild (std::make_unique<APB> (pid ("drone"), "Drone", false));
+    global->addChild (std::make_unique<APB> (pid3 ("hold"), "Hold", false));
+    global->addChild (std::make_unique<API> (pid3 ("transpose"), "Transpose", -24, 24, 0, juce::AudioParameterIntAttributes()
+                                                 .withStringFromValueFunction ([] (int v, int) { return (v > 0 ? "+" : "") + juce::String (v) + " st"; })));
     global->addChild (std::make_unique<APC> (pid ("interp"), "Interpolation", juce::StringArray { "Linear", "Hermite" }, 1));
     global->addChild (std::make_unique<APC> (pid ("oversampling"), "Oversampling", juce::StringArray { "1x", "2x", "4x" }, 1));
     layout.add (std::move (global));
@@ -150,6 +154,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         add (std::make_unique<APF> (pid (opId (i, "decay")),   nm ("Decay"),   timeRange (30.0f, 1.0f), 0.6f, secondsAttr()));
         add (std::make_unique<APF> (pid (opId (i, "sustain")), nm ("Sustain"), NR (0.0f, 1.0f), 0.8f, percentAttr()));
         add (std::make_unique<APF> (pid (opId (i, "release")), nm ("Release"), timeRange (30.0f, 1.5f), 0.4f, secondsAttr()));
+        // изгиб отрезков огибающей: 0 — прямая, +1 — быстрый старт, −1 — медленный старт
+        add (std::make_unique<APF> (pid3 (opId (i, "aCurve")), nm ("Attack Curve"),  NR (-1.0f, 1.0f), kDefaultAttackCurve, bipolarPercentAttr()));
+        add (std::make_unique<APF> (pid3 (opId (i, "dCurve")), nm ("Decay Curve"),   NR (-1.0f, 1.0f), kDefaultFallCurve, bipolarPercentAttr()));
+        add (std::make_unique<APF> (pid3 (opId (i, "rCurve")), nm ("Release Curve"), NR (-1.0f, 1.0f), kDefaultFallCurve, bipolarPercentAttr()));
 
         // Sample playback
         add (std::make_unique<APF> (pid (opId (i, "start")),     nm ("Start"),      NR (0.0f, 1.0f), 0.0f, percentAttr()));
@@ -202,6 +210,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     menv->addChild (std::make_unique<APF> (pid ("menv_decay"),   "ModEnv Decay",   timeRange (30.0f, 1.0f), 1.0f, secondsAttr()));
     menv->addChild (std::make_unique<APF> (pid ("menv_sustain"), "ModEnv Sustain", NR (0.0f, 1.0f), 0.0f, percentAttr()));
     menv->addChild (std::make_unique<APF> (pid ("menv_release"), "ModEnv Release", timeRange (30.0f, 1.5f), 0.5f, secondsAttr()));
+    menv->addChild (std::make_unique<APF> (pid3 ("menv_aCurve"), "ModEnv Attack Curve",  NR (-1.0f, 1.0f), kDefaultAttackCurve, bipolarPercentAttr()));
+    menv->addChild (std::make_unique<APF> (pid3 ("menv_dCurve"), "ModEnv Decay Curve",   NR (-1.0f, 1.0f), kDefaultFallCurve, bipolarPercentAttr()));
+    menv->addChild (std::make_unique<APF> (pid3 ("menv_rCurve"), "ModEnv Release Curve", NR (-1.0f, 1.0f), kDefaultFallCurve, bipolarPercentAttr()));
     layout.add (std::move (menv));
 
     // ---------------- LFOs

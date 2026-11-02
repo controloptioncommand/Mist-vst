@@ -27,6 +27,7 @@ public:
     void filesDropped (const juce::StringArray& files, int, int) override;
 
     void openFileChooser();
+    void startRename();
     bool hasSample() const;
     bool keyPressed (const juce::KeyPress& k) override;
     void focusGained (FocusChangeType) override { repaint(); }
@@ -41,8 +42,10 @@ private:
     juce::TextButton reverse { "Reverse" };
     std::unique_ptr<APVTS::ButtonAttachment> reverseAttachment;
     std::unique_ptr<juce::FileChooser> chooser;
-    juce::Rectangle<int> waveArea, powerArea;
-    juce::String cachedRole;
+    void finishRename (bool commit);
+    juce::Rectangle<int> waveArea, powerArea, nameArea;
+    juce::String cachedRole, cachedName;
+    std::unique_ptr<juce::TextEditor> nameEditor;
 };
 
 // Большой вид волны выбранного оператора с маркерами start/loop

@@ -85,15 +85,42 @@ void layoutGrid (juce::Rectangle<int> area, int cols, const std::vector<juce::Co
 // Белая карточка с тенью — общий фон блоков
 void drawCard (juce::Graphics& g, juce::Rectangle<float> r, float radius = 12.0f, bool shadow = true);
 
+// График огибающей. На середине атаки, спада и релиза — точки изгиба: тянуть вверх/вниз,
+// двойной клик — форма по умолчанию. С клавиатуры: ←/→ выбор отрезка, ↑/↓ изгиб.
 class EnvelopeView : public juce::Component
 {
 public:
-    void setValues (float d, float a, float h, float dec, float s, float r) { vals = { d, a, h, dec, s, r }; repaint(); }
-    void setColour (juce::Colour c) { colour = c; repaint(); }
+    EnvelopeView();
+    struct Ids { juce::String delay, attack, hold, decay, sustain, release, aCurve, dCurve, rCurve; };
+    void attach (APVTS& state, const Ids& ids);
+    void setColour (juce::Colour c) { colour = c; hasColour = true; repaint(); }   // иначе — Accent текущей темы
+    void refresh();                    // перечитать параметры (по таймеру редактора)
     void paint (juce::Graphics& g) override;
+    void mouseMove (const juce::MouseEvent& e) override;
+    void mouseExit (const juce::MouseEvent&) override { setHover (-1); }
+    void mouseDown (const juce::MouseEvent& e) override;
+    void mouseDrag (const juce::MouseEvent& e) override;
+    void mouseUp (const juce::MouseEvent& e) override;
+    void mouseDoubleClick (const juce::MouseEvent& e) override;
+    bool keyPressed (const juce::KeyPress& k) override;
+    void focusGained (FocusChangeType) override { repaint(); }
+    void focusLost (FocusChangeType) override { repaint(); }
 
 private:
-    std::array<float, 6> vals {};
-    juce::Colour colour = Colours::accent;
+    float value (const juce::String& id) const;
+    juce::RangedAudioParameter* curveParam (int seg) const;
+    void nudgeCurve (int seg, float delta);
+    int handleAt (juce::Point<float> p) const;
+    void setHover (int h) { if (h != hover) { hover = h; repaint(); } }
+    void updateDescription();
+
+    APVTS* state = nullptr;
+    Ids ids;
+    std::array<float, 9> vals {};      // d a h dec s r curveA curveD curveR
+    std::array<juce::Point<float>, 3> handles;
+    int hover = -1, dragging = -1, focused = 0;
+    float dragStartCurve = 0.0f;
+    juce::Colour colour;
+    bool hasColour = false;
 };
 } // namespace mist

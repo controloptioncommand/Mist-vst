@@ -10,11 +10,13 @@ FilterPanel::FilterPanel (MistProcessor& p) : Section ("Filter / Mod Env")
     cutoff.attach (s, "cutoff"); reso.attach (s, "reso"); env.attach (s, "filterEnv");
     key.attach (s, "filterKey"); drive.attach (s, "drive");
     ma.attach (s, "menv_attack"); md.attach (s, "menv_decay"); ms.attach (s, "menv_sustain"); mr.attach (s, "menv_release");
-    for (juce::Component* c : std::initializer_list<juce::Component*> { &on, &type, &cutoff, &reso, &env, &key, &drive, &ma, &md, &ms, &mr, &modEnvLabel })
+    for (juce::Component* c : std::initializer_list<juce::Component*> { &on, &type, &cutoff, &reso, &env, &key, &drive, &ma, &md, &ms, &mr, &modEnvLabel, &modEnvView })
         addAndMakeVisible (c);
     for (auto* k : { &cutoff, &reso, &env, &key, &drive, &ma, &md, &ms, &mr })
         k->slider.getProperties().set ("accent", "accent");
 
+    modEnvView.attach (s, { {}, "menv_attack", {}, "menv_decay", "menv_sustain", "menv_release", "menv_aCurve", "menv_dCurve", "menv_rCurve" });
+    modEnvView.setTitle ("Mod Env shape");
     modEnvLabel.setText ("MOD ENV", juce::dontSendNotification);
     modEnvLabel.setFont (MistLookAndFeel::font (10.0f, true));
     styleLabel (modEnvLabel, true);
@@ -30,6 +32,8 @@ void FilterPanel::resized()
     layoutRow (row1, { &cutoff, &reso, &env, &key, &drive });
     r.removeFromTop (4);
     modEnvLabel.setBounds (r.removeFromLeft (80).withSizeKeepingCentre (80, 16));
+    modEnvView.setBounds (r.removeFromRight (juce::jmin (260, r.getWidth() / 3)).reduced (0, 8));
+    r.removeFromRight (8);
     layoutRow (r, { &ma, &md, &ms, &mr });
 }
 
@@ -106,6 +110,21 @@ ModMatrixPanel::ModMatrixPanel (MistProcessor& p) : Section ("Mod Matrix")
         addAndMakeVisible (row.value);
         row.amt.onValueChange();
     }
+}
+
+void ModMatrixPanel::setOpNames (const juce::StringArray& names)
+{
+    const auto base = modDestNames();
+    for (auto& row : rows)
+        for (int d = DstOpLevel0; d < NumModDests; ++d)
+        {
+            const int op = (d - DstOpLevel0) % kNumOps;
+            static const char* kinds[] = { "Level", "Pitch", "Scan", "Feedback" };
+            const auto custom = names[op];
+            const auto text = custom == "Op " + juce::String (op + 1) ? base[d] : custom + " " + kinds[(d - DstOpLevel0) / kNumOps];
+            row.dst.changeItemText (d + 1, text);
+            if (row.dst.getSelectedId() == d + 1) row.dst.setText (text, juce::dontSendNotification);
+        }
 }
 
 void ModMatrixPanel::resized()

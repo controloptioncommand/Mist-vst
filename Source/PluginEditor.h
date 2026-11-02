@@ -63,6 +63,19 @@ private:
     float level = 0.0f;
 };
 
+// «Pitch (ручка) +0 st» в тулбаре рядом с Out — общее транспонирование ±24 полутона
+class TransposeControl : public juce::Component
+{
+public:
+    explicit TransposeControl (APVTS& state);
+    void paint (juce::Graphics& g) override;
+    void resized() override;
+    juce::Slider knob;
+
+private:
+    std::unique_ptr<APVTS::SliderAttachment> attachment;
+};
+
 // Логотип Mist (Medeo Pixel) — открывает About
 class LogoButton : public juce::Button
 {
@@ -114,6 +127,9 @@ private:
     void updatePageTitle();
     void updateRoles();
     void layoutSlots();
+    void loadRandomizerOptions();
+    void setRandomizerGroup (RandomizerOptions::Group g, bool allowed);
+    void refreshOpNames();
 
     MistProcessor& proc;
     MistLookAndFeel lnf;
@@ -126,6 +142,7 @@ private:
                settingsButton { IconButton::Settings, "Settings" };
     juce::TextButton presetName;
     Segmented modeSwitch;
+    TransposeControl transpose;
     OutMeter outMeter;
     juce::Rectangle<int> toolbarArea;
 
@@ -151,9 +168,11 @@ private:
     std::vector<juce::Component*> pages;
 
     // подвал
-    ParamToggle drone { "Drone" };
+    ParamToggle drone { "Drone" }, hold { "Hold" };   // взаимоисключающие
     IconButton dice { IconButton::Dice, "Randomize sound" };
     juce::Random rng;
+    RandomizerOptions diceOptions;
+    juce::StringArray shownOpNames;
     PillChoice interp, oversampling;
     juce::Label statusLabel;
 

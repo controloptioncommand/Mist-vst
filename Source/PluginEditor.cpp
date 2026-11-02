@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "FactoryPresets.h"
 
 namespace mist
 {
@@ -122,6 +123,44 @@ bool PillChoice::keyPressed (const juce::KeyPress& k)
 }
 
 // ===========================================================================
+TransposeControl::TransposeControl (APVTS& state)
+{
+    knob.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
+    knob.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+    knob.setRotaryParameters (juce::degreesToRadians (225.0f), juce::degreesToRadians (495.0f), true);
+    knob.getProperties().set ("accent", "accent");
+    knob.setDoubleClickReturnValue (true, 0.0);
+    knob.setMouseDragSensitivity (160);
+    knob.setWantsKeyboardFocus (true);
+    knob.setTitle ("Pitch");
+    knob.setDescription ("Transposes the whole sound, -24 to +24 semitones. Double-click resets.");
+    knob.onValueChange = [this] { repaint(); };
+    addAndMakeVisible (knob);
+    attachment = std::make_unique<APVTS::SliderAttachment> (state, "transpose", knob);
+}
+
+void TransposeControl::resized()
+{
+    auto r = getLocalBounds();
+    r.removeFromLeft (34);
+    knob.setBounds (r.removeFromLeft (28).withSizeKeepingCentre (28, 28));
+}
+
+void TransposeControl::paint (juce::Graphics& g)
+{
+    auto r = getLocalBounds();
+    g.setFont (LnF::font (LnF::Type::subheadline));
+    g.setColour (Colours::ink2);
+    g.drawText ("Pitch", r.removeFromLeft (34), juce::Justification::centredLeft);
+    r.removeFromLeft (28 + 6);
+    const int v = juce::roundToInt (knob.getValue());
+    g.setFont (LnF::mono (LnF::Type::footnote));
+    g.setColour (Colours::ink);
+    g.drawText ((v > 0 ? "+" : v < 0 ? juce::String::fromUTF8 ("\xe2\x88\x92") : juce::String()) + juce::String (std::abs (v)) + " st",
+                r, juce::Justification::centredLeft);
+}
+
+// ===========================================================================
 void OutMeter::setLevel (float peak)
 {
     level = peak;
@@ -218,7 +257,7 @@ static std::unique_ptr<juce::PropertiesFile> openPrefs()
 MistEditor::MistEditor (MistProcessor& p)
     : AudioProcessorEditor (&p), proc (p),
       opPage (p), envPage (p), routing (p), voicePage (p), filterPage (p), lfo1 (p, 0), lfo2 (p, 1), modPage (p),
-      interp (p.apvts, "interp", "Interpolation"), oversampling (p.apvts, "oversampling", "Oversampling")
+      transpose (p.apvts), interp (p.apvts, "interp", "Interpolation"), oversampling (p.apvts, "oversampling", "Oversampling")
 {
     Accessibility::refresh();
     themeMode = (ThemeMode) juce::jlimit (0, 2, openPrefs()->getIntValue ("themeMode", 0));
@@ -228,7 +267,7 @@ MistEditor::MistEditor (MistProcessor& p)
     addAndMakeVisible (content);
 
     // тулбар
-    for (juce::Component* c : std::initializer_list<juce::Component*> { &logo, &prevPreset, &presetName, &nextPreset, &modeSwitch, &outMeter, &settingsButton })
+    for (juce::Component* c : std::initializer_list<juce::Component*> { &logo, &prevPreset, &presetName, &nextPreset, &modeSwitch, &transpose, &outMeter, &settingsButton })
         content.addAndMakeVisible (c);
     presetName.getProperties().set ("textOnly", true);
     presetName.setTitle ("Preset");
@@ -266,16 +305,26 @@ MistEditor::MistEditor (MistProcessor& p)
 
     drone.attach (proc.apvts, "drone");
     drone.getProperties().set ("accent", "live");
+    drone.setDescription ("Notes keep sounding after you let go and pile up, up to 8 voices.");
+    hold.attach (proc.apvts, "hold");
+    hold.getProperties().set ("accent", "live");
+    hold.setDescription ("Notes keep sounding after you let go; each new press replaces them. Keys pressed together form one chord.");
+    // две кнопки, включение одной выключает другую
+    drone.onClick = [this] { if (drone.getToggleState() && hold.getToggleState()) setParam ("hold", 0.0f); };
+    hold.onClick  = [this] { if (hold.getToggleState() && drone.getToggleState()) setParam ("drone", 0.0f); };
+    loadRandomizerOptions();
     statusLabel.setFont (LnF::mono (LnF::Type::footnote));
     styleLabel (statusLabel, true);
     statusLabel.setJustificationType (juce::Justification::centredRight);
-    dice.setDescription ("Randomizes the timbre: algorithm, ratios, envelopes, filter and LFOs. Master, samples and modes stay as they are.");
-    dice.onClick = [this] { randomizePatch (proc, rng); };
-    for (juce::Component* c : std::initializer_list<juce::Component*> { &drone, &interp, &oversampling, &dice, &statusLabel })
+    dice.setDescription ("Randomizes the timbre: algorithm, ratios, envelopes, filter and LFOs. "
+                         "Master, Pitch, samples and pan stay as they are. Choose what it may change in Settings, Randomizer.");
+    dice.onClick = [this] { randomizePatch (proc, rng, diceOptions); };
+    for (juce::Component* c : std::initializer_list<juce::Component*> { &drone, &hold, &interp, &oversampling, &dice, &statusLabel })
         content.addAndMakeVisible (c);
 
     content.addChildComponent (about);
     about.onClose = [this] { showAbout (false); };
+    about.onGameJump = [this] { proc.playJumpSound(); };
 
     disableClickFocus (content);
     updateRoles();
@@ -328,6 +377,22 @@ void MistEditor::setThemeMode (ThemeMode m)
     applyThemeMode();
 }
 
+void MistEditor::loadRandomizerOptions()
+{
+    auto prefs = openPrefs();
+    for (int gi = 0; gi < RandomizerOptions::NumGroups; ++gi)
+    {
+        const auto grp = (RandomizerOptions::Group) gi;
+        diceOptions.enabled[(size_t) gi] = prefs->getBoolValue (RandomizerOptions::prefKey (grp), RandomizerOptions().allows (grp));
+    }
+}
+
+void MistEditor::setRandomizerGroup (RandomizerOptions::Group grp, bool allowed)
+{
+    diceOptions.enabled[(size_t) grp] = allowed;
+    if (auto prefs = openPrefs()) { prefs->setValue (RandomizerOptions::prefKey (grp), allowed); prefs->saveIfNeeded(); }
+}
+
 void MistEditor::darkModeSettingChanged()
 {
     if (themeMode == ThemeMode::System) applyThemeMode();
@@ -347,6 +412,15 @@ void MistEditor::updateRoles()
         }
         Colours::opRole[(size_t) i] = role;
     }
+}
+
+void MistEditor::refreshOpNames()
+{
+    juce::StringArray names;
+    for (int i = 0; i < kNumOps; ++i) names.add (proc.getOpName (i));
+    if (names == shownOpNames) return;
+    shownOpNames = names;
+    modPage.setOpNames (names);
 }
 
 void MistEditor::selectOperator (int op)
@@ -385,7 +459,7 @@ void MistEditor::updatePageTitle()
 {
     auto* m = proc.apvts.getParameter (opId (selectedOp, "mode"));
     const int mode = (int) m->convertFrom0to1 (m->getValue());
-    const juce::String opName = "Op " + juce::String (selectedOp + 1) + midDot();
+    const juce::String opName = proc.getOpName (selectedOp) + midDot();
     juce::String t, d;
     switch (page)
     {
@@ -410,15 +484,28 @@ void MistEditor::showPresetMenu()
 {
     proc.presets.refresh();
     juce::PopupMenu menu;
-    std::map<juce::String, juce::PopupMenu> cats;
-    juce::StringArray order;
+    // Templates → характер → шаблоны; дальше папки пользовательских пресетов
+    std::map<juce::String, juce::PopupMenu> templates, user;
+    juce::StringArray userOrder;
     const auto& e = proc.presets.getEntries();
+    const int current = proc.presets.getCurrentIndex();
     for (int i = 0; i < e.size(); ++i)
     {
-        if (! order.contains (e[i].category)) order.add (e[i].category);
-        cats[e[i].category].addItem (i + 1, e[i].name, true, i == proc.presets.getCurrentIndex());
+        if (e[i].factoryIndex >= 0)
+            templates[e[i].category].addItem (i + 1, e[i].name, true, i == current);
+        else
+        {
+            if (! userOrder.contains (e[i].category)) userOrder.add (e[i].category);
+            user[e[i].category].addItem (i + 1, e[i].name, true, i == current);
+        }
     }
-    for (auto& c : order) menu.addSubMenu (c, cats[c]);
+    juce::PopupMenu tm;
+    tm.addSectionHeader ("Load your sample into Op 1");
+    for (auto& c : getTemplateCategories())
+        if (templates.count (c) > 0) tm.addSubMenu (c, templates[c]);
+    menu.addSubMenu ("Templates", tm);
+    if (! userOrder.isEmpty()) menu.addSeparator();
+    for (auto& c : userOrder) menu.addSubMenu (c, user[c]);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (presetName), [this] (int r)
     {
         if (r > 0) proc.presets.load (r - 1);
@@ -444,6 +531,15 @@ void MistEditor::showSettingsMenu()
     for (int pct : { 75, 100, 125, 150 })
         size.addItem (100 + pct, juce::String (pct) + "%", true, std::abs (getWidth() - kBaseW * pct / 100) < 4);
     m.addSubMenu ("Window size", size);
+    juce::PopupMenu dicePrefs;
+    dicePrefs.addSectionHeader ("The dice may change");
+    for (int gi = 0; gi < RandomizerOptions::NumGroups; ++gi)
+    {
+        const auto grp = (RandomizerOptions::Group) gi;
+        if (grp == RandomizerOptions::OperatorModes) dicePrefs.addSeparator();
+        dicePrefs.addItem (300 + gi, RandomizerOptions::name (grp), true, diceOptions.allows (grp));
+    }
+    m.addSubMenu ("Randomizer", dicePrefs);
     m.addSeparator();
     m.addItem (5, "About Mist");
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton), [this] (int r)
@@ -456,6 +552,11 @@ void MistEditor::showSettingsMenu()
         else if (r == 201) setThemeMode (ThemeMode::System);
         else if (r == 202) setThemeMode (ThemeMode::Oxygen);
         else if (r == 203) setThemeMode (ThemeMode::Rubber);
+        else if (r >= 300 && r < 300 + RandomizerOptions::NumGroups)
+        {
+            const auto grp = (RandomizerOptions::Group) (r - 300);
+            setRandomizerGroup (grp, ! diceOptions.allows (grp));
+        }
         else if (r > 100 && r < 200) setSize (kBaseW * (r - 100) / 100, kBaseH * (r - 100) / 100);
     });
 }
@@ -546,6 +647,8 @@ void MistEditor::resized()
         settingsButton.setBounds (h.removeFromRight (32));
         h.removeFromRight (10);
         outMeter.setBounds (h.removeFromRight (160));
+        h.removeFromRight (18);
+        transpose.setBounds (h.removeFromRight (118));
         modeSwitch.setBounds (toolbarArea.withSizeKeepingCentre (270, 32));
     }
     r.removeFromTop (10);
@@ -574,6 +677,8 @@ void MistEditor::resized()
 
     auto b = bottomArea.withTrimmedTop (10);
     drone.setBounds (b.removeFromLeft (92).withSizeKeepingCentre (92, 28));
+    b.removeFromLeft (4);
+    hold.setBounds (b.removeFromLeft (84).withSizeKeepingCentre (84, 28));
     b.removeFromLeft (8);
     interp.setBounds (b.removeFromLeft (172).withSizeKeepingCentre (172, 28));
     b.removeFromLeft (8);
@@ -611,6 +716,7 @@ void MistEditor::timerCallback()
                          juce::dontSendNotification);
 
     updateRoles();
+    refreshOpNames();
     for (auto& s : slots) s->refresh();
     int mask = 0;
     for (int i = 0; i < kNumOps; ++i) if (slots[(size_t) i]->hasSample()) mask |= 1 << i;
@@ -622,6 +728,7 @@ void MistEditor::timerCallback()
         case 0: opPage.refresh(); break;
         case 1: envPage.refresh(); break;
         case 2: routing.refresh(); break;
+        case 4: filterPage.refresh(); break;
         case 5: lfo1.refresh(); lfo2.refresh(); break;
         default: break;
     }

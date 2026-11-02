@@ -1,4 +1,5 @@
 #include "Widgets.h"
+#include "../DSP/Primitives.h"
 
 namespace mist
 {
@@ -164,8 +165,56 @@ void layoutGrid (juce::Rectangle<int> area, int cols, const std::vector<juce::Co
     }
 }
 
+EnvelopeView::EnvelopeView()
+{
+    setWantsKeyboardFocus (true);
+    setTitle ("Envelope shape");
+}
+
+void EnvelopeView::attach (APVTS& s, const Ids& newIds)
+{
+    state = &s;
+    ids = newIds;
+    refresh();
+}
+
+float EnvelopeView::value (const juce::String& id) const
+{
+    if (state == nullptr || id.isEmpty()) return 0.0f;
+    auto* p = state->getParameter (id);
+    return p != nullptr ? p->convertFrom0to1 (p->getValue()) : 0.0f;
+}
+
+juce::RangedAudioParameter* EnvelopeView::curveParam (int seg) const
+{
+    if (state == nullptr) return nullptr;
+    return state->getParameter (seg == 0 ? ids.aCurve : seg == 1 ? ids.dCurve : ids.rCurve);
+}
+
+void EnvelopeView::refresh()
+{
+    const std::array<float, 9> v { value (ids.delay), value (ids.attack), value (ids.hold), value (ids.decay), value (ids.sustain),
+                                   value (ids.release), value (ids.aCurve), value (ids.dCurve), value (ids.rCurve) };
+    if (v != vals)
+    {
+        vals = v;
+        updateDescription();
+        repaint();
+    }
+}
+
+void EnvelopeView::updateDescription()
+{
+    auto pct = [] (float c) { const int p = juce::roundToInt (c * 100.0f); return (p > 0 ? "+" : "") + juce::String (p) + "%"; };
+    static const char* names[] = { "Attack", "Decay", "Release" };
+    setDescription (juce::String ("Curves: attack ") + pct (vals[6]) + ", decay " + pct (vals[7]) + ", release " + pct (vals[8])
+                    + ". Selected: " + names[focused] + ". Left and right arrows select a segment, up and down bend it.");
+}
+
 void EnvelopeView::paint (juce::Graphics& g)
 {
+    using LnF = MistLookAndFeel;
+    const auto colour = hasColour ? this->colour : Colours::accent;
     auto r = getLocalBounds().toFloat().reduced (1.0f);
     g.setColour (Colours::panelHi);
     g.fillRoundedRectangle (r, 8.0f);
@@ -181,26 +230,39 @@ void EnvelopeView::paint (juce::Graphics& g)
     g.setColour (Colours::outline);
     for (int i = 1; i < 4; ++i) g.drawHorizontalLine ((int) Y ((float) i / 4.0f), r.getX() + 6, r.getRight() - 6);
 
+    EnvSegment segA, segD, segR;
+    segA.setCurve (vals[6]); segD.setCurve (vals[7]); segR.setCurve (vals[8]);
+    constexpr int steps = 32;
+
     juce::Path p;
     float t = 0;
     p.startNewSubPath (X (0), Y (0));
     t += d;   p.lineTo (X (t), Y (0));
-    t += a;   p.lineTo (X (t), Y (1));
+    const float tA = t;
+    for (int i = 1; i <= steps; ++i)
+    {
+        const float k = (float) i / steps;
+        p.lineTo (X (tA + a * k), Y ((float) segA.shape (k)));
+    }
+    handles[0] = { X (tA + a * 0.5f), Y ((float) segA.shape (0.5)) };
+    t += a;
     t += h;   p.lineTo (X (t), Y (1));
     const float t0 = t;
-    for (int i = 1; i <= 24; ++i)
+    for (int i = 1; i <= steps; ++i)
     {
-        const float k = (float) i / 24.0f;
-        p.lineTo (X (t0 + dec * k), Y (sus + (1 - sus) * std::exp (-5.0f * k)));
+        const float k = (float) i / steps;
+        p.lineTo (X (t0 + dec * k), Y (1.0f - (1.0f - sus) * (float) segD.shape (k)));
     }
+    handles[1] = { X (t0 + dec * 0.5f), Y (1.0f - (1.0f - sus) * (float) segD.shape (0.5)) };
     t += dec;
     t += susLen; p.lineTo (X (t), Y (sus));
     const float t1 = t;
-    for (int i = 1; i <= 24; ++i)
+    for (int i = 1; i <= steps; ++i)
     {
-        const float k = (float) i / 24.0f;
-        p.lineTo (X (t1 + rel * k), Y (sus * std::exp (-5.0f * k)));
+        const float k = (float) i / steps;
+        p.lineTo (X (t1 + rel * k), Y (sus * (1.0f - (float) segR.shape (k))));
     }
+    handles[2] = { X (t1 + rel * 0.5f), Y (sus * (1.0f - (float) segR.shape (0.5))) };
 
     juce::Path fill (p);
     fill.lineTo (X (total), Y (0));
@@ -209,5 +271,121 @@ void EnvelopeView::paint (juce::Graphics& g)
     g.fillPath (fill);
     g.setColour (colour);
     g.strokePath (p, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+    // точки изгиба
+    const bool kbd = hasKeyboardFocus (false);
+    for (int i = 0; i < 3; ++i)
+    {
+        const bool active = i == hover || i == dragging || (kbd && i == focused);
+        const float rad = active ? 5.5f : 4.5f;
+        auto c = juce::Rectangle<float> (rad * 2, rad * 2).withCentre (handles[(size_t) i]);
+        g.setColour (active ? colour : Colours::surface);
+        g.fillEllipse (c);
+        g.setColour (colour);
+        g.drawEllipse (c, 1.5f);
+    }
+
+    // во время перетаскивания — значение изгиба
+    const int shown = dragging >= 0 ? dragging : hover;
+    if (shown >= 0)
+    {
+        const int pctv = juce::roundToInt (vals[(size_t) (6 + shown)] * 100.0f);
+        g.setFont (LnF::mono (LnF::Type::footnote));
+        g.setColour (Colours::ink2);
+        static const char* names[] = { "Attack curve ", "Decay curve ", "Release curve " };
+        g.drawText (names[shown] + juce::String (pctv > 0 ? "+" : "") + juce::String (pctv) + "%",
+                    r.reduced (10.0f, 6.0f).removeFromTop (14.0f), juce::Justification::centredRight);
+    }
+    if (kbd) LnF::drawFocusRing (g, r, 8.0f);
+}
+
+int EnvelopeView::handleAt (juce::Point<float> pt) const
+{
+    int best = -1;
+    float bestD = 12.0f;   // цель нажатия ≥ 24 px
+    for (int i = 0; i < 3; ++i)
+    {
+        const float dd = pt.getDistanceFrom (handles[(size_t) i]);
+        if (dd < bestD) { bestD = dd; best = i; }
+    }
+    return best;
+}
+
+void EnvelopeView::mouseMove (const juce::MouseEvent& e)
+{
+    const int h = handleAt (e.position);
+    setHover (h);
+    setMouseCursor (h >= 0 ? juce::MouseCursor::UpDownResizeCursor : juce::MouseCursor::NormalCursor);
+}
+
+void EnvelopeView::mouseDown (const juce::MouseEvent& e)
+{
+    dragging = handleAt (e.position);
+    if (dragging < 0) return;
+    focused = dragging;
+    if (auto* p = curveParam (dragging))
+    {
+        dragStartCurve = p->convertFrom0to1 (p->getValue());
+        p->beginChangeGesture();
+    }
+    repaint();
+}
+
+void EnvelopeView::mouseDrag (const juce::MouseEvent& e)
+{
+    if (dragging < 0) return;
+    if (auto* p = curveParam (dragging))
+    {
+        // атака растёт — тянем вверх, кривая выгибается вверх (+); у спада и релиза наоборот
+        const float sign = dragging == 0 ? 1.0f : -1.0f;
+        const float sens = e.mods.isShiftDown() ? 600.0f : 150.0f;
+        const float v = juce::jlimit (-1.0f, 1.0f, dragStartCurve - sign * (float) e.getDistanceFromDragStartY() / sens);
+        p->setValueNotifyingHost (p->convertTo0to1 (v));
+        refresh();
+    }
+}
+
+void EnvelopeView::mouseUp (const juce::MouseEvent&)
+{
+    if (dragging >= 0)
+        if (auto* p = curveParam (dragging)) p->endChangeGesture();
+    dragging = -1;
+    repaint();
+}
+
+void EnvelopeView::mouseDoubleClick (const juce::MouseEvent& e)
+{
+    const int h = handleAt (e.position);
+    if (h < 0) return;
+    if (auto* p = curveParam (h))
+    {
+        p->beginChangeGesture();
+        p->setValueNotifyingHost (p->getDefaultValue());
+        p->endChangeGesture();
+        refresh();
+    }
+}
+
+void EnvelopeView::nudgeCurve (int seg, float delta)
+{
+    if (auto* p = curveParam (seg))
+    {
+        const float v = juce::jlimit (-1.0f, 1.0f, p->convertFrom0to1 (p->getValue()) + delta);
+        p->beginChangeGesture();
+        p->setValueNotifyingHost (p->convertTo0to1 (v));
+        p->endChangeGesture();
+        refresh();
+    }
+}
+
+bool EnvelopeView::keyPressed (const juce::KeyPress& k)
+{
+    if (k == juce::KeyPress::leftKey)  { focused = (focused + 2) % 3; updateDescription(); repaint(); return true; }
+    if (k == juce::KeyPress::rightKey) { focused = (focused + 1) % 3; updateDescription(); repaint(); return true; }
+    // ↑ — точка вверх (у атаки изгиб +, у спада и релиза −)
+    const float sign = focused == 0 ? 1.0f : -1.0f;
+    if (k == juce::KeyPress::upKey)   { nudgeCurve (focused, 0.05f * sign);  return true; }
+    if (k == juce::KeyPress::downKey) { nudgeCurve (focused, -0.05f * sign); return true; }
+    return false;
 }
 } // namespace mist

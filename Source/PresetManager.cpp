@@ -16,7 +16,7 @@ void PresetManager::refresh()
     entries.clear();
     const auto& factory = getFactoryPresets();
     for (int i = 0; i < (int) factory.size(); ++i)
-        entries.add ({ factory[(size_t) i].name, "Factory", {}, i });
+        entries.add ({ factory[(size_t) i].name, factory[(size_t) i].category, {}, i });
 
     auto folder = getPresetFolder();
     if (folder.isDirectory())
@@ -42,7 +42,8 @@ bool PresetManager::load (int index)
 
     if (e.factoryIndex >= 0)
     {
-        proc.resetToDefaults();
+        // фактори-пресеты — шаблоны: семплы, их start/loop/root, имена слотов и Transpose не трогаем
+        proc.resetForTemplate();
         const auto& fp = getFactoryPresets()[(size_t) e.factoryIndex];
         for (const auto& [id, value] : fp.values)
             if (auto* p = proc.apvts.getParameter (id))
